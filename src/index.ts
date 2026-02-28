@@ -1,6 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SessionState, AgentRole, FeatureSpec, Task, ProjectConventions } from "./types";
+import { z } from "zod";
+import type { SessionState, AgentRole, FeatureSpec, Task, ProjectConventions, GitHubPR } from "./types";
 import { KV_KEYS } from "./types";
 import { DEFAULT_CONVENTIONS } from "./defaults";
 import { logActivity, registerSession, touchSession } from "./logger";
@@ -13,8 +14,7 @@ import {
   GitHubGetPRInput, GitHubListOpenPRsInput, GitHubAddPRCommentInput, GitHubMergePRInput,
 } from "./tools";
 
-// ── DashboardBroadcaster ────────────────────────────────────────
-// One global Durable Object that fans WebSocket events to all dashboard clients.
+// ── DashboardBroadcaster ─────────────────────────────────────────
 export class DashboardBroadcaster {
   private connections = new Set<WebSocket>();
   constructor(private readonly state: DurableObjectState, private readonly env: Env) {}
@@ -46,18 +46,15 @@ export class DashboardBroadcaster {
   }
 }
 
-// ── AgenticMcpAgent ─────────────────────────────────────────────
-// One Durable Object per agent session.
+// ── AgenticMcpAgent ──────────────────────────────────────────────
 export class AgenticMcpAgent extends McpAgent {
   server = new McpServer({ name: "agentic-mcp-server", version: "1.0.0" });
   private session!: SessionState;
   private gh!: GitHubClient;
 
   async init() {
-    // Init GitHub client
     this.gh = new GitHubClient(this.env.GITHUB_TOKEN);
 
-    // Restore or create session
     const stored = await this.ctx.storage.get<SessionState>("session");
     if (stored) {
       this.session = stored;
@@ -81,8 +78,6 @@ export class AgenticMcpAgent extends McpAgent {
     });
     this.registerTools();
   }
-
-  // ── Shared infrastructure ──────────────────────────────────────
 
   private async callTool<T>(
     tool: string,
@@ -133,228 +128,312 @@ export class AgenticMcpAgent extends McpAgent {
     return { content: [{ type: "text" as const, text }], isError: true };
   }
 
-  // ── Tool registration ──────────────────────────────────────────
-
   private registerTools() {
-    // ── Existing tools ────────────────────────────────────────────
 
-    this.server.tool("get_conventions", "Fetch project-wide coding conventions. Call at session start.", GetConventionsInput.shape,
-      async () => this.callTool("get_conventions", undefined, undefined, async () => {
-        const c = await this.getConventions();
-        return this.ok(JSON.stringify(c, null, 2));
-      })
+    // get_conventions
+    this.server.tool(
+      "get_conventions",
+      "Fetch project-wide coding conventions. Call at session start.",
+      GetConventionsInput.shape,
+      async (_args: z.infer<typeof GetConventionsInput>) =>
+        this.callTool("get_conventions", undefined, undefined, async () => {
+          const c = await this.getConventions();
+          return this.ok(JSON.stringify(c, null, 2));
+        })
     );
 
-    this.server.tool("get_feature_spec", "Retrieve a feature spec.", GetFeatureSpecInput.shape,
-      async ({ featureId }) => this.callTool("get_feature_spec", featureId, undefined, async () => {
-        const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(featureId), "json");
-        if (!spec) return this.err(`Feature '${featureId}' not found.`);
-        return this.ok(JSON.stringify(spec, null, 2));
-      })
+    // get_feature_spec
+    this.server.tool(
+      "get_feature_spec",
+      "Retrieve a feature spec.",
+      GetFeatureSpecInput.shape,
+      async (args: z.infer<typeof GetFeatureSpecInput>) =>
+        this.callTool("get_feature_spec", args.featureId, undefined, async () => {
+          const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
+          if (!spec) return this.err(`Feature '${args.featureId}' not found.`);
+          return this.ok(JSON.stringify(spec, null, 2));
+        })
     );
 
-    this.server.tool("list_features", "List all feature specs.", ListFeaturesInput.shape,
-      async ({ status }) => this.callTool("list_features", undefined, undefined, async () => {
-        const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
-        const features: FeatureSpec[] = [];
-        for (const id of index) {
-          const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
-          if (spec && (status === "all" || spec.status === status)) features.push(spec);
-        }
-        if (features.length === 0) return this.ok("No features found.");
-        return this.ok(JSON.stringify(features.map(f => ({
-          id: f.id, title: f.title, status: f.status, taskCount: f.tasks.length,
-          githubBranch: f.githubBranch, githubPR: f.githubPR?.number,
-        })), null, 2));
-      })
+    // list_features
+    this.server.tool(
+      "list_features",
+      "List all feature specs.",
+      ListFeaturesInput.shape,
+      async (args: z.infer<typeof ListFeaturesInput>) =>
+        this.callTool("list_features", undefined, undefined, async () => {
+          const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
+          const features: FeatureSpec[] = [];
+          for (const id of index) {
+            const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
+            if (spec && (args.status === "all" || spec.status === args.status)) features.push(spec);
+          }
+          if (features.length === 0) return this.ok("No features found.");
+          return this.ok(JSON.stringify(features.map(f => ({
+            id: f.id, title: f.title, status: f.status, taskCount: f.tasks.length,
+            githubBranch: f.githubBranch, githubPR: f.githubPR?.number,
+          })), null, 2));
+        })
     );
 
-    this.server.tool("upsert_feature_spec", "Create or update a feature specification.", UpsertFeatureSpecInput.shape,
-      async (input) => this.callTool("upsert_feature_spec", input.id, undefined, async () => {
-        const id = input.id ?? `feat-${Date.now()}`;
-        const existing = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
-        const tasks: Task[] = (input.tasks ?? existing?.tasks ?? []).map((t, i) => ({
-          id: `${id}-task-${i + 1}`, title: t.title, description: t.description,
-          assignedRole: t.assignedRole, status: "todo" as const,
-        }));
-        const spec: FeatureSpec = {
-          id, title: input.title, description: input.description,
-          status: input.status ?? "planning",
-          createdAt: existing?.createdAt ?? new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          tasks,
-          assignedAgents: existing?.assignedAgents ?? {},
-          githubIssue: input.githubIssue ?? existing?.githubIssue,
-          githubBranch: input.githubBranch ?? existing?.githubBranch,
-          githubPR: existing?.githubPR, // preserve existing PR data
-        };
-        spec.assignedAgents[this.session.agentRole] = this.session.agentName;
-        await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
-        const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
-        if (!index.includes(id)) { index.push(id); await this.env.SHARED_CONTEXT.put(KV_KEYS.featureIndex, JSON.stringify(index)); }
-        this.session.currentFeature = id;
-        await this.persistSession();
-        this.broadcast({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
-        return this.ok(`Feature '${id}' saved. Tasks: ${tasks.length}.`);
-      })
+    // upsert_feature_spec
+    this.server.tool(
+      "upsert_feature_spec",
+      "Create or update a feature specification.",
+      UpsertFeatureSpecInput.shape,
+      async (args: z.infer<typeof UpsertFeatureSpecInput>) =>
+        this.callTool("upsert_feature_spec", args.id, undefined, async () => {
+          const id = args.id ?? `feat-${Date.now()}`;
+          const existing = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
+          const tasks: Task[] = (args.tasks ?? existing?.tasks ?? []).map((t: Task, i: number) => ({
+            id: `${id}-task-${i + 1}`,
+            title: t.title,
+            description: t.description,
+            assignedRole: t.assignedRole,
+            status: "todo" as const,
+          }));
+          const spec: FeatureSpec = {
+            id, title: args.title, description: args.description,
+            status: args.status ?? "planning",
+            createdAt: existing?.createdAt ?? new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            tasks,
+            assignedAgents: existing?.assignedAgents ?? {},
+            githubIssue: args.githubIssue ?? existing?.githubIssue,
+            githubBranch: args.githubBranch ?? existing?.githubBranch,
+            githubPR: existing?.githubPR,
+          };
+          spec.assignedAgents[this.session.agentRole] = this.session.agentName;
+          await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
+          const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
+          if (!index.includes(id)) {
+            index.push(id);
+            await this.env.SHARED_CONTEXT.put(KV_KEYS.featureIndex, JSON.stringify(index));
+          }
+          this.session.currentFeature = id;
+          await this.persistSession();
+          this.broadcast({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
+          return this.ok(`Feature '${id}' saved. Tasks: ${tasks.length}.`);
+        })
     );
 
-    this.server.tool("update_task_status", "Mark a task as in-progress, done, or blocked.", UpdateTaskStatusInput.shape,
-      async ({ featureId, taskId, status, blockedBy }) => this.callTool("update_task_status", featureId, taskId, async () => {
-        const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(featureId), "json");
-        if (!spec) return this.err(`Feature '${featureId}' not found.`);
-        const task = spec.tasks.find(t => t.id === taskId);
-        if (!task) return this.err(`Task '${taskId}' not found.`);
-        task.status = status;
-        if (blockedBy) task.blockedBy = blockedBy;
-        if (status === "done") { task.completedAt = new Date().toISOString(); this.session.tasksCompleted.push(taskId); }
-        spec.updatedAt = new Date().toISOString();
-        await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(featureId), JSON.stringify(spec));
-        await this.persistSession();
-        this.broadcast({ type: "task_updated", featureId, taskId, status, agentRole: this.session.agentRole, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
-        return this.ok(`Task '${task.title}' → '${status}'.`);
-      })
+    // update_task_status
+    this.server.tool(
+      "update_task_status",
+      "Mark a task as in-progress, done, or blocked.",
+      UpdateTaskStatusInput.shape,
+      async (args: z.infer<typeof UpdateTaskStatusInput>) =>
+        this.callTool("update_task_status", args.featureId, args.taskId, async () => {
+          const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
+          if (!spec) return this.err(`Feature '${args.featureId}' not found.`);
+          const task = spec.tasks.find((t: Task) => t.id === args.taskId);
+          if (!task) return this.err(`Task '${args.taskId}' not found.`);
+          task.status = args.status;
+          if (args.blockedBy) task.blockedBy = args.blockedBy;
+          if (args.status === "done") {
+            task.completedAt = new Date().toISOString();
+            this.session.tasksCompleted.push(args.taskId);
+          }
+          spec.updatedAt = new Date().toISOString();
+          await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(args.featureId), JSON.stringify(spec));
+          await this.persistSession();
+          this.broadcast({
+            type: "task_updated", featureId: args.featureId, taskId: args.taskId,
+            status: args.status, agentRole: this.session.agentRole,
+            agentName: this.session.agentName, timestamp: new Date().toISOString(),
+          }).catch(() => {});
+          return this.ok(`Task '${task.title}' → '${args.status}'.`);
+        })
     );
 
-    this.server.tool("update_session_notes", "Save working notes (survives hibernation).", UpdateSessionNotesInput.shape,
-      async ({ notes }) => this.callTool("update_session_notes", undefined, undefined, async () => {
-        this.session.notes = notes;
-        await this.persistSession();
-        return this.ok("Session notes saved.");
-      })
+    // update_session_notes
+    this.server.tool(
+      "update_session_notes",
+      "Save working notes (survives hibernation).",
+      UpdateSessionNotesInput.shape,
+      async (args: z.infer<typeof UpdateSessionNotesInput>) =>
+        this.callTool("update_session_notes", undefined, undefined, async () => {
+          this.session.notes = args.notes;
+          await this.persistSession();
+          return this.ok("Session notes saved.");
+        })
     );
 
-    this.server.tool("read_shared_memory", "Read shared KV memory.", ReadSharedMemoryInput.shape,
-      async ({ role }) => this.callTool("read_shared_memory", undefined, undefined, async () => {
-        const key = role ? KV_KEYS.agentMemory(role) : KV_KEYS.sharedNotes;
-        const content = await this.env.SHARED_CONTEXT.get(key);
-        return this.ok(content ?? `No memory at '${key}'.`);
-      })
+    // read_shared_memory
+    this.server.tool(
+      "read_shared_memory",
+      "Read shared KV memory.",
+      ReadSharedMemoryInput.shape,
+      async (args: z.infer<typeof ReadSharedMemoryInput>) =>
+        this.callTool("read_shared_memory", undefined, undefined, async () => {
+          const key = args.role ? KV_KEYS.agentMemory(args.role) : KV_KEYS.sharedNotes;
+          const content = await this.env.SHARED_CONTEXT.get(key);
+          return this.ok(content ?? `No memory at '${key}'.`);
+        })
     );
 
-    this.server.tool("write_shared_memory", "Write to shared KV memory (visible to all agents).", WriteSharedMemoryInput.shape,
-      async ({ content, role, append }) => this.callTool("write_shared_memory", undefined, undefined, async () => {
-        const key = role ? KV_KEYS.agentMemory(role) : KV_KEYS.sharedNotes;
-        let finalContent = content;
-        if (append) { const existing = await this.env.SHARED_CONTEXT.get(key); if (existing) finalContent = `${existing}\n\n---\n\n${content}`; }
-        await this.env.SHARED_CONTEXT.put(key, finalContent);
-        this.broadcast({ type: "memory_written", key, role, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
-        return this.ok(`Memory written to '${key}'.`);
-      })
+    // write_shared_memory
+    this.server.tool(
+      "write_shared_memory",
+      "Write to shared KV memory (visible to all agents).",
+      WriteSharedMemoryInput.shape,
+      async (args: z.infer<typeof WriteSharedMemoryInput>) =>
+        this.callTool("write_shared_memory", undefined, undefined, async () => {
+          const key = args.role ? KV_KEYS.agentMemory(args.role) : KV_KEYS.sharedNotes;
+          let finalContent = args.content;
+          if (args.append) {
+            const existing = await this.env.SHARED_CONTEXT.get(key);
+            if (existing) finalContent = `${existing}\n\n---\n\n${args.content}`;
+          }
+          await this.env.SHARED_CONTEXT.put(key, finalContent);
+          this.broadcast({
+            type: "memory_written", key, role: args.role,
+            agentName: this.session.agentName, timestamp: new Date().toISOString(),
+          }).catch(() => {});
+          return this.ok(`Memory written to '${key}'.`);
+        })
     );
 
-    this.server.tool("get_session_state", "Get current session state.", GetSessionStateInput.shape,
-      async () => this.callTool("get_session_state", undefined, undefined, async () =>
-        this.ok(JSON.stringify(this.session, null, 2))
-      )
+    // get_session_state
+    this.server.tool(
+      "get_session_state",
+      "Get current session state.",
+      GetSessionStateInput.shape,
+      async (_args: z.infer<typeof GetSessionStateInput>) =>
+        this.callTool("get_session_state", undefined, undefined, async () =>
+          this.ok(JSON.stringify(this.session, null, 2))
+        )
     );
 
-    this.server.tool("update_conventions", "Update global project conventions (planner/orchestrator only).", UpdateConventionsInput.shape,
-      async ({ section, content }) => this.callTool("update_conventions", undefined, undefined, async () => {
-        if (!["planner", "orchestrator"].includes(this.session.agentRole)) {
-          return this.err(`Access denied. Your role: ${this.session.agentRole}`);
-        }
-        const conventions = await this.getConventions();
-        try {
-          (conventions as any)[section] = JSON.parse(content);
-          conventions.lastUpdated = new Date().toISOString();
-          await this.env.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(conventions));
-          return this.ok(`Conventions section '${section}' updated.`);
-        } catch { return this.err("Invalid JSON for conventions section."); }
-      })
+    // update_conventions
+    this.server.tool(
+      "update_conventions",
+      "Update global project conventions (planner/orchestrator only).",
+      UpdateConventionsInput.shape,
+      async (args: z.infer<typeof UpdateConventionsInput>) =>
+        this.callTool("update_conventions", undefined, undefined, async () => {
+          if (!["planner", "orchestrator"].includes(this.session.agentRole)) {
+            return this.err(`Access denied. Your role: ${this.session.agentRole}`);
+          }
+          const conventions = await this.getConventions();
+          try {
+            (conventions as Record<string, unknown>)[args.section] = JSON.parse(args.content);
+            conventions.lastUpdated = new Date().toISOString();
+            await this.env.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(conventions));
+            return this.ok(`Conventions section '${args.section}' updated.`);
+          } catch {
+            return this.err("Invalid JSON for conventions section.");
+          }
+        })
     );
 
-    // ── GitHub tools ──────────────────────────────────────────────
-
+    // github_get_repo_info
     this.server.tool(
       "github_get_repo_info",
-      "Get repository info: name, default branch, description. Good for orientation at session start.",
+      "Get repository info: name, default branch, description.",
       GitHubGetRepoInfoInput.shape,
-      async ({ repo }) => this.callTool("github_get_repo_info", undefined, undefined, async () => {
-        const info = await this.gh.getRepoInfo(repo);
-        return this.ok(JSON.stringify(info, null, 2));
-      })
+      async (args: z.infer<typeof GitHubGetRepoInfoInput>) =>
+        this.callTool("github_get_repo_info", undefined, undefined, async () => {
+          const info = await this.gh.getRepoInfo(args.repo);
+          return this.ok(JSON.stringify(info, null, 2));
+        })
     );
 
+    // github_create_branch
     this.server.tool(
       "github_create_branch",
-      "Create a new git branch in the repository. The planner agent should call this when starting a new feature.",
+      "Create a new git branch. The planner agent should call this when starting a new feature.",
       GitHubCreateBranchInput.shape,
-      async ({ repo, branchName, fromBranch }) => this.callTool("github_create_branch", undefined, undefined, async () => {
-        const result = await this.gh.createBranch(repo, branchName, fromBranch);
-        return this.ok(`Branch '${result.name}' created at ${result.sha.slice(0, 7)}.`);
-      })
+      async (args: z.infer<typeof GitHubCreateBranchInput>) =>
+        this.callTool("github_create_branch", undefined, undefined, async () => {
+          const result = await this.gh.createBranch(args.repo, args.branchName, args.fromBranch);
+          return this.ok(`Branch '${result.name}' created at ${result.sha.slice(0, 7)}.`);
+        })
     );
 
+    // github_open_pr
     this.server.tool(
       "github_open_pr",
-      "Open a pull request. Call this when a feature branch is ready for review. The PR is cached on the feature spec so the dashboard can display it.",
+      "Open a pull request. PR is cached on the feature spec so the dashboard can display it.",
       GitHubOpenPRInput.shape,
-      async ({ repo, title, body, head, base, draft, reviewers }) => this.callTool("github_open_pr", undefined, undefined, async () => {
-        const pr = await this.gh.openPullRequest(repo, { title, body, head, base, draft, reviewers });
-
-        // Cache PR on the matching feature spec (match by branch name)
-        await this.cachePROnFeature(head, pr);
-
-        this.broadcast({ type: "pr_opened", pr, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
-        return this.ok(`PR #${pr.number} opened: ${pr.url}`);
-      })
+      async (args: z.infer<typeof GitHubOpenPRInput>) =>
+        this.callTool("github_open_pr", undefined, undefined, async () => {
+          const pr = await this.gh.openPullRequest(args.repo, {
+            title: args.title, body: args.body, head: args.head,
+            base: args.base, draft: args.draft, reviewers: args.reviewers,
+          });
+          await this.cachePROnFeature(args.head, pr);
+          this.broadcast({ type: "pr_opened", pr, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
+          return this.ok(`PR #${pr.number} opened: ${pr.url}`);
+        })
     );
 
+    // github_get_pr
     this.server.tool(
       "github_get_pr",
-      "Get the current status of a pull request, including review state and merge status.",
+      "Get the current status of a pull request, including review state.",
       GitHubGetPRInput.shape,
-      async ({ repo, prNumber }) => this.callTool("github_get_pr", undefined, undefined, async () => {
-        const pr = await this.gh.getPullRequest(repo, prNumber);
-        const reviews = await this.gh.getPRReviews(repo, prNumber);
-        return this.ok(JSON.stringify({ ...pr, reviews }, null, 2));
-      })
+      async (args: z.infer<typeof GitHubGetPRInput>) =>
+        this.callTool("github_get_pr", undefined, undefined, async () => {
+          const pr = await this.gh.getPullRequest(args.repo, args.prNumber);
+          const reviews = await this.gh.getPRReviews(args.repo, args.prNumber);
+          return this.ok(JSON.stringify({ ...pr, reviews }, null, 2));
+        })
     );
 
+    // github_list_open_prs
     this.server.tool(
       "github_list_open_prs",
-      "List open pull requests, optionally filtered by branch. Use to see what's awaiting review.",
+      "List open pull requests, optionally filtered by branch.",
       GitHubListOpenPRsInput.shape,
-      async ({ repo, headBranch }) => this.callTool("github_list_open_prs", undefined, undefined, async () => {
-        const prs = await this.gh.listOpenPRs(repo, headBranch);
-        if (prs.length === 0) return this.ok("No open pull requests.");
-        return this.ok(JSON.stringify(prs.map(p => ({
-          number: p.number, title: p.title, url: p.url, draft: p.draft,
-          author: p.author, head: p.headBranch, comments: p.comments,
-        })), null, 2));
-      })
+      async (args: z.infer<typeof GitHubListOpenPRsInput>) =>
+        this.callTool("github_list_open_prs", undefined, undefined, async () => {
+          const prs = await this.gh.listOpenPRs(args.repo, args.headBranch);
+          if (prs.length === 0) return this.ok("No open pull requests.");
+          return this.ok(JSON.stringify(prs.map(p => ({
+            number: p.number, title: p.title, url: p.url, draft: p.draft,
+            author: p.author, head: p.headBranch, comments: p.comments,
+          })), null, 2));
+        })
     );
 
+    // github_add_pr_comment
     this.server.tool(
       "github_add_pr_comment",
-      "Post a comment on a pull request. Use for review notes, questions, or handoff messages to other agents.",
+      "Post a comment on a pull request.",
       GitHubAddPRCommentInput.shape,
-      async ({ repo, prNumber, body }) => this.callTool("github_add_pr_comment", undefined, undefined, async () => {
-        const result = await this.gh.addPRComment(repo, prNumber, body);
-        return this.ok(`Comment posted: ${result.url}`);
-      })
+      async (args: z.infer<typeof GitHubAddPRCommentInput>) =>
+        this.callTool("github_add_pr_comment", undefined, undefined, async () => {
+          const result = await this.gh.addPRComment(args.repo, args.prNumber, args.body);
+          return this.ok(`Comment posted: ${result.url}`);
+        })
     );
 
+    // github_merge_pr
     this.server.tool(
       "github_merge_pr",
-      "Merge a pull request. Restricted to reviewer/orchestrator roles. Squash merge by default.",
+      "Merge a pull request. Restricted to reviewer/orchestrator roles.",
       GitHubMergePRInput.shape,
-      async ({ repo, prNumber, mergeMethod, commitTitle, commitMessage }) => this.callTool("github_merge_pr", undefined, undefined, async () => {
-        if (!["reviewer", "orchestrator"].includes(this.session.agentRole)) {
-          return this.err(`Merge restricted to reviewer/orchestrator. Your role: ${this.session.agentRole}`);
-        }
-        const result = await this.gh.mergePullRequest(repo, prNumber, { mergeMethod, commitTitle, commitMessage });
-        this.broadcast({ type: "pr_merged", repo, prNumber, sha: result.sha, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
-        return this.ok(`PR #${prNumber} merged. SHA: ${result.sha?.slice(0, 7)} — ${result.message}`);
-      })
+      async (args: z.infer<typeof GitHubMergePRInput>) =>
+        this.callTool("github_merge_pr", undefined, undefined, async () => {
+          if (!["reviewer", "orchestrator"].includes(this.session.agentRole)) {
+            return this.err(`Merge restricted to reviewer/orchestrator. Your role: ${this.session.agentRole}`);
+          }
+          const result = await this.gh.mergePullRequest(args.repo, args.prNumber, {
+            mergeMethod: args.mergeMethod,
+            commitTitle: args.commitTitle,
+            commitMessage: args.commitMessage,
+          });
+          this.broadcast({
+            type: "pr_merged", repo: args.repo, prNumber: args.prNumber,
+            sha: result.sha, agentName: this.session.agentName, timestamp: new Date().toISOString(),
+          }).catch(() => {});
+          return this.ok(`PR #${args.prNumber} merged. SHA: ${result.sha?.slice(0, 7)} — ${result.message}`);
+        })
     );
   }
 
-  // ── Helpers ────────────────────────────────────────────────────
-
-  /** Cache GitHub PR data on the feature spec that matches the branch name */
-  private async cachePROnFeature(branchName: string, pr: import("./types").GitHubPR): Promise<void> {
+  private async cachePROnFeature(branchName: string, pr: GitHubPR): Promise<void> {
     const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
     for (const id of index) {
       const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
@@ -383,7 +462,7 @@ export class AgenticMcpAgent extends McpAgent {
   }
 }
 
-// ── Dashboard API handler ────────────────────────────────────────
+// ── Dashboard API ────────────────────────────────────────────────
 async function handleDashboardApi(url: URL, env: Env): Promise<Response> {
   const path = url.pathname.replace("/dashboard/api", "");
   if (path === "/sessions") {
@@ -410,7 +489,7 @@ async function handleDashboardApi(url: URL, env: Env): Promise<Response> {
 
 // ── Worker entry point ───────────────────────────────────────────
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return corsResponse(new Response(null, { status: 204 }));
     if (url.pathname === "/health") {
@@ -431,11 +510,7 @@ export default {
     if (url.pathname === "/") {
       return corsResponse(Response.json({
         name: "agentic-mcp-server",
-        endpoints: {
-          mcp: "/mcp", dashboard_ws: "/dashboard/ws",
-          dashboard_api: "/dashboard/api/{sessions|features|activity|stats}",
-          health: "/health",
-        },
+        endpoints: { mcp: "/mcp", dashboard_ws: "/dashboard/ws", dashboard_api: "/dashboard/api/{sessions|features|activity|stats}", health: "/health" },
       }));
     }
     return corsResponse(new Response("Not found", { status: 404 }));
