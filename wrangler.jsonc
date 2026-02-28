@@ -1,0 +1,61 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agentic-mcp-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Durable Objects — one per agent session for stateful MCP connections
+  "durable_objects": {
+  "bindings": [
+    { "name": "MCP_AGENT", "class_name": "AgenticMcpAgent" },
+    { "name": "DASHBOARD_BROADCASTER", "class_name": "DashboardBroadcaster" }
+  ]
+},
+
+  // KV Namespaces — shared state across all agent sessions
+"kv_namespaces": [
+  {
+    "binding": "SHARED_CONTEXT",
+    "id": "763cf484e1b8408d8a82465b147d6c4c",
+    "preview_id": "884c42aacdf5423e8012be47dc920d7b"
+  }
+],
+  
+  // Durable Object migrations
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AgenticMcpAgent"]
+    },
+    {
+      "tag": "v2",
+      "new_classes": ["DashboardBroadcaster"]
+    }
+  ],
+
+  // Environment variables (non-secret)
+  "vars": {
+    "ENVIRONMENT": "production",
+    "PROJECT_NAME": "agentic-mcp-server",
+    "DASHBOARD_ORIGIN": "https://dashboard.YOUR_PAGES_DOMAIN.pages.dev"
+  },
+
+  "env": {
+    "staging": {
+      "name": "agentic-mcp-server-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "DASHBOARD_ORIGIN": "https://dashboard-staging.YOUR_PAGES_DOMAIN.pages.dev"
+      },
+      "kv_namespaces": [
+        { "binding": "SHARED_CONTEXT", "id": "REPLACE_WITH_STAGING_KV_ID" }
+      ]
+    }
+  },
+
+  // Observability — enables request tracing in the dashboard
+  "observability": {
+    "enabled": true
+  }
+}

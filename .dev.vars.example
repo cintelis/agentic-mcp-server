@@ -1,0 +1,6 @@
+# Copy this to .dev.vars (which is gitignored) and fill in values
+# Used by `wrangler dev` for local development
+
+AUTH_SECRET=replace-with-32-char-random-string
+GITHUB_CLIENT_ID=your-github-oauth-app-client-id
+GITHUB_CLIENT_SECRET=your-github-oauth-app-client-secret
