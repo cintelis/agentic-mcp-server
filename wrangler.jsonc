@@ -38,7 +38,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "PROJECT_NAME": "agentic-mcp-server",
-    "DASHBOARD_ORIGIN": "https://a6d53428.agentic-mcp-dashboard.pages.dev"
+    "DASHBOARD_ORIGIN": "https://agentic-dashboard.365softlabs.com/"
   },
 
   // Observability — enables request tracing in the dashboard

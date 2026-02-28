@@ -22,7 +22,8 @@ function fmt(n: number): string {
   return String(n)
 }
 
-function topN<T extends Record<string, number>>(obj: T, n = 5): [string, number][] {
+function topN<T extends Record<string, number>>(obj: T | null | undefined, n = 5): [string, number][] {
+  if (!obj) return []
   return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n)
 }
 
@@ -151,8 +152,8 @@ function StatsBar({ stats, features }: { stats: AgentStats | null; features: Fea
     { label: 'FEATURES LIVE', value: String(inProg), color: 'var(--green)' },
     { label: 'IN REVIEW', value: String(inReview), color: 'var(--yellow)' },
     { label: 'SHIPPED', value: String(done), color: 'var(--purple)' },
-    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts)[0]?.[0] ?? '—') : '—', color: 'var(--orange)' },
-    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts)[0]?.[0]?.replace(/_/g, ' ') ?? '—') : '—', color: 'var(--accent)' },
+    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts ?? {})[0]?.[0] ?? '—') : '—', color: 'var(--orange)' },
+    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts ?? {})[0]?.[0]?.replace(/_/g, ' ') ?? '—') : '—', color: 'var(--accent)' },
   ]
 
   return (
@@ -380,14 +381,15 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
 
 // ── Stats Charts ──────────────────────────────────────────────────
 
-function HourlyChart({ data }: { data: number[] }) {
-  const max = Math.max(...data, 1)
+function HourlyChart({ data }: { data: number[] | null | undefined }) {
+  const safeData = data && data.length === 24 ? data : new Array(24).fill(0)
+  const max = Math.max(...safeData, 1)
   const now = new Date().getUTCHours()
   return (
     <div>
       <SectionLabel>Hourly Activity (UTC)</SectionLabel>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 48 }}>
-        {data.map((val, i) => (
+        {safeData.map((val, i) => (
           <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <div style={{
               width: '100%', borderRadius: '2px 2px 0 0',
