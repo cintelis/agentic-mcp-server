@@ -37,6 +37,7 @@ export interface FeatureSpec {
   assignedAgents: Partial<Record<AgentRole, string>>; // role -> agentName
   githubIssue?: number;
   githubBranch?: string;
+  githubPR?: GitHubPR; // cached PR data from GitHub API
 }
 
 export interface Task {
@@ -133,3 +134,22 @@ export const KV_KEYS = {
   activityIndex: (date: string) => `dashboard:activity:${date}`, // per-day index
   stats: "dashboard:stats",
 } as const;
+
+/** GitHub PR info cached in KV alongside feature spec */
+export interface GitHubPR {
+  number: number;
+  title: string;
+  url: string;
+  state: "open" | "closed" | "merged";
+  draft: boolean;
+  reviewState?: "approved" | "changes_requested" | "pending";
+  createdAt: string;
+  updatedAt: string;
+  author: string;
+  headBranch: string;
+  baseBranch: string;
+  additions: number;
+  deletions: number;
+  comments: number;
+  reviewers: string[];
+}

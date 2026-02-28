@@ -175,3 +175,49 @@ export const TOOL_DEFINITIONS = [
     inputSchema: UpdateConventionsInput,
   },
 ] as const;
+
+// ── GitHub tool schemas ──────────────────────────────────────────
+
+export const GitHubGetRepoInfoInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format, e.g. '365softlabs/my-api'"),
+});
+
+export const GitHubCreateBranchInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  branchName: z.string().describe("New branch name, e.g. 'feat/my-feature'"),
+  fromBranch: z.string().optional().describe("Base branch to branch from. Defaults to repo default branch."),
+});
+
+export const GitHubOpenPRInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  title: z.string().describe("PR title"),
+  body: z.string().describe("PR description (markdown supported)"),
+  head: z.string().describe("Feature branch name to merge from"),
+  base: z.string().optional().describe("Target branch. Defaults to repo default branch."),
+  draft: z.boolean().default(false).describe("Open as a draft PR"),
+  reviewers: z.array(z.string()).optional().describe("GitHub usernames to request as reviewers"),
+});
+
+export const GitHubGetPRInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  prNumber: z.number().int().describe("Pull request number"),
+});
+
+export const GitHubListOpenPRsInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  headBranch: z.string().optional().describe("Filter by head branch name"),
+});
+
+export const GitHubAddPRCommentInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  prNumber: z.number().int().describe("Pull request number"),
+  body: z.string().describe("Comment body (markdown supported)"),
+});
+
+export const GitHubMergePRInput = z.object({
+  repo: z.string().describe("Target repository in 'owner/repo' format"),
+  prNumber: z.number().int().describe("Pull request number"),
+  mergeMethod: z.enum(["merge", "squash", "rebase"]).default("squash"),
+  commitTitle: z.string().optional().describe("Custom merge commit title"),
+  commitMessage: z.string().optional().describe("Custom merge commit message"),
+});

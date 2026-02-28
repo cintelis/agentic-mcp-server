@@ -16,7 +16,5 @@ interface Env {
   DASHBOARD_ORIGIN: string;
 
   // Secrets (set via: wrangler secret put SECRET_NAME)
-  GITHUB_CLIENT_ID: string;
-  GITHUB_CLIENT_SECRET: string;
-  AUTH_SECRET: string; // random 32-char string for signing session tokens
+  GITHUB_TOKEN: string;   // wrangler secret put GITHUB_TOKEN
 }

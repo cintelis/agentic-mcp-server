@@ -34,6 +34,25 @@ export interface FeatureSpec {
   assignedAgents: Partial<Record<AgentRole, string>>
   githubIssue?: number
   githubBranch?: string
+  githubPR?: GitHubPR
+}
+
+export interface GitHubPR {
+  number: number
+  title: string
+  url: string
+  state: 'open' | 'closed' | 'merged'
+  draft: boolean
+  reviewState?: 'approved' | 'changes_requested' | 'pending'
+  createdAt: string
+  updatedAt: string
+  author: string
+  headBranch: string
+  baseBranch: string
+  additions: number
+  deletions: number
+  comments: number
+  reviewers: string[]
 }
 
 export interface ActivityEvent {
@@ -61,7 +80,7 @@ export interface AgentStats {
 }
 
 export interface WSEvent {
-  type: 'tool_call' | 'feature_updated' | 'task_updated' | 'memory_written' | 'session_connected'
+  type: 'tool_call' | 'feature_updated' | 'task_updated' | 'memory_written' | 'session_connected' | 'pr_opened' | 'pr_merged'
   timestamp: string
   [key: string]: unknown
 }
@@ -87,4 +106,11 @@ export const TOOL_ICONS: Record<string, string> = {
   write_shared_memory: '💾',
   get_session_state: '🔄',
   update_conventions: '⚙️',
+  github_get_repo_info: '🐙',
+  github_create_branch: '⎇',
+  github_open_pr: '🔀',
+  github_get_pr: '🔍',
+  github_list_open_prs: '📋',
+  github_add_pr_comment: '💬',
+  github_merge_pr: '✅',
 }

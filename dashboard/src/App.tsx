@@ -274,6 +274,24 @@ function KanbanCard({ feature }: { feature: FeatureSpec }) {
           {feature.githubBranch && (
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '1px 5px', borderRadius: 3 }}>⎇ {feature.githubBranch}</span>
           )}
+          {feature.githubPR && (
+            <a
+              href={feature.githubPR.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', borderRadius: 3, textDecoration: 'none',
+                color: feature.githubPR.state === 'merged' ? 'var(--purple)' : feature.githubPR.state === 'closed' ? 'var(--red)' : feature.githubPR.draft ? 'var(--text-dim)' : 'var(--green)',
+                background: feature.githubPR.state === 'merged' ? 'var(--purple-dim)' : feature.githubPR.state === 'closed' ? 'var(--red-dim)' : feature.githubPR.draft ? 'var(--bg-3)' : 'var(--green-dim)',
+                border: '1px solid currentColor',
+              }}
+            >
+              {feature.githubPR.state === 'merged' ? '⛙' : feature.githubPR.draft ? '⊘' : '⎇'} PR #{feature.githubPR.number}
+              {feature.githubPR.reviewState === 'approved' && ' ✓'}
+              {feature.githubPR.reviewState === 'changes_requested' && ' ✗'}
+            </a>
+          )}
         </div>
       </div>
       {open && (
