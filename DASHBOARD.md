@@ -19,8 +19,8 @@ Mission Control is a real-time dashboard for monitoring AI agents connected to t
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        AI AGENTS (Clients)                          │
 │                                                                     │
-│   Claude Desktop    Claude Code    Roo Code    CodeGPT             │
-│   role=planner      role=frontend  role=tester role=backend        │
+│   Claude Desktop    Claude Code    Roo Code    CodeGPT              │
+│   role=planner      role=frontend  role=tester role=backend         │
 └────────────────────────────┬────────────────────────────────────────┘
                              │ MCP over HTTP/SSE
                              │ POST /mcp?role=X&name=Y
@@ -29,19 +29,19 @@ Mission Control is a real-time dashboard for monitoring AI agents connected to t
 │                   CLOUDFLARE WORKER                                 │
 │                   agentic-mcp-server                                │
 │                                                                     │
-│  ┌──────────────────────────────┐  ┌────────────────────────────┐  │
-│  │   AgenticMcpAgent DO         │  │   DashboardBroadcaster DO  │  │
-│  │   (one per agent session)    │  │   (one global instance)    │  │
-│  │                              │  │                            │  │
-│  │  • Handles MCP tool calls    │  │  • Holds all WebSocket     │  │
-│  │  • Wraps every tool in       │  │    connections from        │  │
-│  │    callTool() logger         │  │    dashboard clients       │  │
-│  │  • Persists session state    │  │  • Fans out events to      │  │
-│  │    in Durable Object storage │  │    all connected dashboards│  │
-│  │  • Calls logActivity() +     │  │                            │  │
-│  │    broadcast() after         │  │  POST /broadcast           │  │
-│  │    every tool call           │  │  GET  /ws (WebSocket)      │  │
-│  └──────────┬───────────────────┘  └────────────▲───────────────┘  │
+│  ┌──────────────────────────────┐  ┌────────────────────────────┐   │
+│  │   AgenticMcpAgent DO         │  │   DashboardBroadcaster DO  │   │
+│  │   (one per agent session)    │  │   (one global instance)    │   │
+│  │                              │  │                            │   │
+│  │  • Handles MCP tool calls    │  │  • Holds all WebSocket     │   │
+│  │  • Wraps every tool in       │  │    connections from        │   │
+│  │    callTool() logger         │  │    dashboard clients       │   │
+│  │  • Persists session state    │  │  • Fans out events to      │   │
+│  │    in Durable Object storage │  │    all connected dashboards│   │
+│  │  • Calls logActivity() +     │  │                            │   │
+│  │    broadcast() after         │  │  POST /broadcast           │   │
+│  │    every tool call           │  │  GET  /ws (WebSocket)      │   │
+│  └──────────┬───────────────────┘  └─────────────▲──────────────┘   │
 │             │                                    │                  │
 │             │ fire-and-forget                    │ broadcast event  │
 │             ▼                                    │                  │
@@ -74,11 +74,11 @@ Mission Control is a real-time dashboard for monitoring AI agents connected to t
 │                   agentic-mcp-dashboard                             │
 │                                                                     │
 │   React SPA (Vite build)                                            │
-│   https://agentic-dashboard.365softlabs.com                        │
+│   https://agentic-dashboard.365softlabs.com                         │
 │                                                                     │
-│   • Initial load: fetches all 4 API endpoints in parallel          │
+│   • Initial load: fetches all 4 API endpoints in parallel           │
 │   • Real-time: WebSocket receives events and updates UI instantly   │
-│   • Fallback: polls all endpoints every 30 seconds                 │
+│   • Fallback: polls all endpoints every 30 seconds                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
