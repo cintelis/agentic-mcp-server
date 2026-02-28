@@ -30,7 +30,7 @@
     },
     {
       "tag": "v2",
-      "new_classes": ["DashboardBroadcaster"]
+      "new_sqlite_classes": ["DashboardBroadcaster"]
     }
   ],
 
@@ -38,20 +38,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "PROJECT_NAME": "agentic-mcp-server",
-    "DASHBOARD_ORIGIN": "https://dashboard.YOUR_PAGES_DOMAIN.pages.dev"
-  },
-
-  "env": {
-    "staging": {
-      "name": "agentic-mcp-server-staging",
-      "vars": {
-        "ENVIRONMENT": "staging",
-        "DASHBOARD_ORIGIN": "https://dashboard-staging.YOUR_PAGES_DOMAIN.pages.dev"
-      },
-      "kv_namespaces": [
-        { "binding": "SHARED_CONTEXT", "id": "REPLACE_WITH_STAGING_KV_ID" }
-      ]
-    }
+    "DASHBOARD_ORIGIN": "https://4f5496dc.agentic-mcp-dashboard.pages.dev"
   },
 
   // Observability — enables request tracing in the dashboard
