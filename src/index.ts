@@ -189,7 +189,8 @@ export class AgenticMcpAgent extends McpAgent<Env> {
         this.callTool("upsert_feature_spec", args.id, undefined, async () => {
           const id = args.id ?? `feat-${Date.now()}`;
           const existing = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
-          const tasks: Task[] = (args.tasks ?? existing?.tasks ?? []).map((t: Task, i: number) => ({
+          type TaskInput = { title: string; description: string; assignedRole: AgentRole };
+          const tasks: Task[] = (args.tasks ?? existing?.tasks ?? []).map((t: TaskInput, i: number) => ({
             id: `${id}-task-${i + 1}`,
             title: t.title,
             description: t.description,
@@ -230,7 +231,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
         this.callTool("update_task_status", args.featureId, args.taskId, async () => {
           const spec = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
           if (!spec) return this.err(`Feature '${args.featureId}' not found.`);
-          const task = spec.tasks.find((t: Task) => t.id === args.taskId);
+          const task = spec.tasks.find(t => t.id === args.taskId);
           if (!task) return this.err(`Task '${args.taskId}' not found.`);
           task.status = args.status;
           if (args.blockedBy) task.blockedBy = args.blockedBy;
