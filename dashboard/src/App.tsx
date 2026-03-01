@@ -127,7 +127,7 @@ function Header({ connected, activeCount, onRefresh, isMobile }: { connected: bo
       <div style={{ flex: 1, minWidth: isMobile ? 0 : undefined }} />
 
       {/* Clock */}
-      {!isMobile && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>{now}</div>}
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 9 : 11, color: 'var(--text-dim)', ...(isMobile && { width: '100%', order: 10 }) }}>{now}</div>
 
       {/* Agent count */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
