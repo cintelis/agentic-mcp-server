@@ -1,10 +1,10 @@
-// dashboard/src/App.tsx
+﻿// dashboard/src/App.tsx
 import { useState, useEffect, useRef } from 'react'
 import { useDashboard } from './hooks'
 import { ROLE_CONFIG, TOOL_ICONS } from './types'
 import type { AgentSession, FeatureSpec, ActivityEvent, AgentStats } from './types'
 
-// ── Helpers ───────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -27,7 +27,23 @@ function topN<T extends Record<string, number>>(obj: T | null | undefined, n = 5
   return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n)
 }
 
-// ── Sub-components ────────────────────────────────────────────────
+function useIsMobile(maxWidth = 900) {
+  const getMatch = () => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${maxWidth}px)`).matches
+  const [isMobile, setIsMobile] = useState(getMatch)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia(`(max-width: ${maxWidth}px)`)
+    const onChange = () => setIsMobile(media.matches)
+    onChange()
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [maxWidth])
+
+  return isMobile
+}
+
+// â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function RoleBadge({ role }: { role: string }) {
   const cfg = ROLE_CONFIG[role as keyof typeof ROLE_CONFIG]
@@ -73,9 +89,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ── Header ────────────────────────────────────────────────────────
+// â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function Header({ connected, activeCount, onRefresh }: { connected: boolean; activeCount: number; onRefresh: () => void }) {
+function Header({ connected, activeCount, onRefresh, isMobile }: { connected: boolean; activeCount: number; onRefresh: () => void; isMobile: boolean }) {
   const [tick, setTick] = useState(0)
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 1000); return () => clearInterval(t) }, [])
   const now = new Date().toUTCString().replace('GMT', 'UTC')
@@ -83,8 +99,13 @@ function Header({ connected, activeCount, onRefresh }: { connected: boolean; act
   return (
     <div style={{
       background: 'var(--bg-1)', borderBottom: '1px solid var(--border)',
-      padding: '0 24px', height: 56, display: 'flex', alignItems: 'center',
-      gap: 20, flexShrink: 0,
+      padding: isMobile ? '8px 12px' : '0 24px',
+      minHeight: isMobile ? 76 : 56,
+      display: 'flex',
+      alignItems: 'center',
+      flexWrap: isMobile ? 'wrap' : 'nowrap',
+      gap: isMobile ? 10 : 20,
+      flexShrink: 0,
     }}>
       {/* Logo / Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -92,7 +113,7 @@ function Header({ connected, activeCount, onRefresh }: { connected: boolean; act
           width: 28, height: 28, borderRadius: 6, background: 'var(--accent-dim)',
           border: '1px solid var(--accent)', display: 'grid', placeItems: 'center',
           fontSize: 14,
-        }}>⬡</div>
+        }}>â¬¡</div>
         <div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>
             MISSION CONTROL
@@ -103,15 +124,15 @@ function Header({ connected, activeCount, onRefresh }: { connected: boolean; act
         </div>
       </div>
 
-      <div style={{ flex: 1 }} />
+      <div style={{ flex: 1, minWidth: isMobile ? 0 : undefined }} />
 
       {/* Clock */}
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>{now}</div>
+      {!isMobile && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>{now}</div>}
 
       {/* Agent count */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <StatusDot active={activeCount > 0} />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 10 : 11, color: 'var(--text-secondary)' }}>
           {activeCount} agent{activeCount !== 1 ? 's' : ''} active
         </span>
       </div>
@@ -123,7 +144,7 @@ function Header({ connected, activeCount, onRefresh }: { connected: boolean; act
         background: connected ? 'var(--green-dim)' : 'var(--red-dim)',
         border: `1px solid ${connected ? 'rgba(0,229,160,0.25)' : 'rgba(255,77,109,0.25)'}`,
       }}>
-        <span style={{ fontSize: 8, color: connected ? 'var(--green)' : 'var(--red)', animation: connected ? 'pulse 1.5s infinite' : 'none' }}>●</span>
+        <span style={{ fontSize: 8, color: connected ? 'var(--green)' : 'var(--red)', animation: connected ? 'pulse 1.5s infinite' : 'none' }}>â—</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: connected ? 'var(--green)' : 'var(--red)' }}>
           {connected ? 'LIVE' : 'RECONNECTING'}
         </span>
@@ -132,17 +153,19 @@ function Header({ connected, activeCount, onRefresh }: { connected: boolean; act
       {/* Refresh */}
       <button onClick={onRefresh} style={{
         background: 'var(--bg-2)', border: '1px solid var(--border-bright)',
-        borderRadius: 4, padding: '5px 12px', color: 'var(--text-secondary)',
-        cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 10,
+        borderRadius: 4, padding: isMobile ? '8px 12px' : '5px 12px', color: 'var(--text-secondary)',
+        minHeight: isMobile ? 36 : undefined,
+        touchAction: 'manipulation',
+        cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: isMobile ? 9 : 10,
         letterSpacing: '0.05em',
-      }}>↺ REFRESH</button>
+      }}>â†º REFRESH</button>
     </div>
   )
 }
 
-// ── Stats Bar ─────────────────────────────────────────────────────
+// â”€â”€ Stats Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function StatsBar({ stats, features }: { stats: AgentStats | null; features: FeatureSpec[] }) {
+function StatsBar({ stats, features, isMobile }: { stats: AgentStats | null; features: FeatureSpec[]; isMobile: boolean }) {
   const done = features.filter(f => f.status === 'done').length
   const inProg = features.filter(f => f.status === 'in-progress').length
   const inReview = features.filter(f => f.status === 'review').length
@@ -152,30 +175,33 @@ function StatsBar({ stats, features }: { stats: AgentStats | null; features: Fea
     { label: 'FEATURES LIVE', value: String(inProg), color: 'var(--green)' },
     { label: 'IN REVIEW', value: String(inReview), color: 'var(--yellow)' },
     { label: 'SHIPPED', value: String(done), color: 'var(--purple)' },
-    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts ?? {})[0]?.[0] ?? '—') : '—', color: 'var(--orange)' },
-    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts ?? {})[0]?.[0]?.replace(/_/g, ' ') ?? '—') : '—', color: 'var(--accent)' },
+    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts ?? {})[0]?.[0] ?? 'â€”') : 'â€”', color: 'var(--orange)' },
+    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts ?? {})[0]?.[0]?.replace(/_/g, ' ') ?? 'â€”') : 'â€”', color: 'var(--accent)' },
   ]
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)',
+      display: isMobile ? 'flex' : 'grid',
+      gridTemplateColumns: isMobile ? undefined : 'repeat(6, 1fr)',
+      overflowX: isMobile ? 'auto' : 'visible',
       gap: 1, background: 'var(--border)', borderBottom: '1px solid var(--border)',
       flexShrink: 0,
     }}>
       {statItems.map(({ label, value, color }) => (
         <div key={label} style={{
-          background: 'var(--bg-1)', padding: '10px 16px',
+          background: 'var(--bg-1)', padding: isMobile ? '10px 12px' : '10px 16px',
+          minWidth: isMobile ? 124 : undefined,
           display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.12em' }}>{label}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color, letterSpacing: '-0.02em' }}>{value}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: isMobile ? 15 : 18, fontWeight: 700, color, letterSpacing: '-0.02em' }}>{value}</div>
         </div>
       ))}
     </div>
   )
 }
 
-// ── Agent Sessions Panel ──────────────────────────────────────────
+// â”€â”€ Agent Sessions Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AgentsPanel({ sessions }: { sessions: Record<string, AgentSession> }) {
   const sorted = Object.values(sessions).sort((a, b) =>
@@ -218,7 +244,7 @@ function AgentsPanel({ sessions }: { sessions: Record<string, AgentSession> }) {
   )
 }
 
-// ── Kanban Board ──────────────────────────────────────────────────
+// â”€â”€ Kanban Board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TaskChip({ task }: { task: FeatureSpec['tasks'][0] }) {
   const colors: Record<string, string> = { todo: 'var(--text-dim)', 'in-progress': 'var(--accent)', done: 'var(--green)', blocked: 'var(--red)' }
@@ -241,7 +267,7 @@ function TaskChip({ task }: { task: FeatureSpec['tasks'][0] }) {
   )
 }
 
-function KanbanCard({ feature }: { feature: FeatureSpec }) {
+function KanbanCard({ feature, isMobile }: { feature: FeatureSpec; isMobile: boolean }) {
   const [open, setOpen] = useState(false)
   const tasksByStatus = {
     todo: feature.tasks.filter(t => t.status === 'todo'),
@@ -258,21 +284,29 @@ function KanbanCard({ feature }: { feature: FeatureSpec }) {
     }}>
       <div
         onClick={() => setOpen(o => !o)}
-        style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 }}
+        style={{
+          padding: isMobile ? '14px 12px' : '10px 12px',
+          minHeight: isMobile ? 44 : undefined,
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          touchAction: 'manipulation',
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', paddingTop: 2, flexShrink: 0 }}>{feature.id}</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{feature.title}</span>
-          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>{open ? 'â–²' : 'â–¼'}</span>
         </div>
         {/* Progress bar */}
         <div style={{ height: 3, background: 'var(--bg-3)', borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? 'var(--green)' : 'var(--accent)', transition: 'width 0.4s ease', borderRadius: 2 }} />
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{progress}% · {feature.tasks.length} tasks</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{progress}% Â· {feature.tasks.length} tasks</span>
           {feature.githubBranch && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '1px 5px', borderRadius: 3 }}>⎇ {feature.githubBranch}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: isMobile ? '3px 7px' : '1px 5px', borderRadius: 3 }}>âŽ‡ {feature.githubBranch}</span>
           )}
           {feature.githubPR && (
             <a
@@ -281,15 +315,16 @@ function KanbanCard({ feature }: { feature: FeatureSpec }) {
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', borderRadius: 3, textDecoration: 'none',
+                fontFamily: 'var(--font-mono)', fontSize: 9, padding: isMobile ? '3px 7px' : '1px 5px', borderRadius: 3, textDecoration: 'none',
                 color: feature.githubPR.state === 'merged' ? 'var(--purple)' : feature.githubPR.state === 'closed' ? 'var(--red)' : feature.githubPR.draft ? 'var(--text-dim)' : 'var(--green)',
                 background: feature.githubPR.state === 'merged' ? 'var(--purple-dim)' : feature.githubPR.state === 'closed' ? 'var(--red-dim)' : feature.githubPR.draft ? 'var(--bg-3)' : 'var(--green-dim)',
                 border: '1px solid currentColor',
+                touchAction: 'manipulation',
               }}
             >
-              {feature.githubPR.state === 'merged' ? '⛙' : feature.githubPR.draft ? '⊘' : '⎇'} PR #{feature.githubPR.number}
-              {feature.githubPR.reviewState === 'approved' && ' ✓'}
-              {feature.githubPR.reviewState === 'changes_requested' && ' ✗'}
+              {feature.githubPR.state === 'merged' ? 'â›™' : feature.githubPR.draft ? 'âŠ˜' : 'âŽ‡'} PR #{feature.githubPR.number}
+              {feature.githubPR.reviewState === 'approved' && ' âœ“'}
+              {feature.githubPR.reviewState === 'changes_requested' && ' âœ—'}
             </a>
           )}
         </div>
@@ -305,7 +340,7 @@ function KanbanCard({ feature }: { feature: FeatureSpec }) {
   )
 }
 
-function KanbanBoard({ features }: { features: FeatureSpec[] }) {
+function KanbanBoard({ features, isMobile }: { features: FeatureSpec[]; isMobile: boolean }) {
   const columns: { key: FeatureSpec['status']; label: string; color: string }[] = [
     { key: 'planning',    label: 'Planning',    color: 'var(--text-dim)' },
     { key: 'in-progress', label: 'In Progress', color: 'var(--accent)' },
@@ -314,7 +349,12 @@ function KanbanBoard({ features }: { features: FeatureSpec[] }) {
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, minHeight: 0 }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+      gap: 12,
+      minHeight: 0,
+    }}>
       {columns.map(col => {
         const colFeatures = features.filter(f => f.status === col.key)
         return (
@@ -324,8 +364,8 @@ function KanbanBoard({ features }: { features: FeatureSpec[] }) {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: col.color, textTransform: 'uppercase' }}>{col.label}</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)', marginLeft: 'auto' }}>{colFeatures.length}</span>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {colFeatures.map(f => <KanbanCard key={f.id} feature={f} />)}
+            <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto' }}>
+              {colFeatures.map(f => <KanbanCard key={f.id} feature={f} isMobile={isMobile} />)}
               {colFeatures.length === 0 && (
                 <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>empty</div>
               )}
@@ -337,7 +377,7 @@ function KanbanBoard({ features }: { features: FeatureSpec[] }) {
   )
 }
 
-// ── Activity Feed ─────────────────────────────────────────────────
+// â”€â”€ Activity Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -360,7 +400,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
         {activity.map((evt, i) => {
           const roleCfg = ROLE_CONFIG[evt.agentRole]
           const isNew = newIds.has(evt.id)
-          const icon = TOOL_ICONS[evt.tool] ?? '🔧'
+          const icon = TOOL_ICONS[evt.tool] ?? 'ðŸ”§'
           return (
             <div key={evt.id ?? i} style={{
               display: 'flex', gap: 8, alignItems: 'flex-start',
@@ -374,7 +414,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: roleCfg?.color ?? 'var(--text-secondary)' }}>{evt.agentName}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>→</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>â†’</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>{evt.tool.replace(/_/g, ' ')}</span>
                   {evt.featureId && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '1px 4px', borderRadius: 3 }}>{evt.featureId}</span>}
                   {!evt.success && <span style={{ fontSize: 9, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>ERR</span>}
@@ -397,7 +437,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
   )
 }
 
-// ── Stats Charts ──────────────────────────────────────────────────
+// â”€â”€ Stats Charts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function HourlyChart({ data }: { data: number[] | null | undefined }) {
   const safeData = data && data.length === 24 ? data : new Array(24).fill(0)
@@ -453,7 +493,7 @@ function TopList({ title, data, color }: { title: string; data: [string, number]
 }
 
 function StatsPanel({ stats }: { stats: AgentStats | null }) {
-  if (!stats) return <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading stats…</div>
+  if (!stats) return <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading statsâ€¦</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <HourlyChart data={stats.hourlyActivity} />
@@ -464,23 +504,35 @@ function StatsPanel({ stats }: { stats: AgentStats | null }) {
   )
 }
 
-// ── Tab Bar ───────────────────────────────────────────────────────
+// â”€â”€ Tab Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Tab = 'kanban' | 'agents' | 'activity' | 'stats'
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+function TabBar({ active, onChange, isMobile }: { active: Tab; onChange: (t: Tab) => void; isMobile: boolean }) {
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'kanban', label: '⊞ Features' },
-    { id: 'agents', label: '◎ Agents' },
-    { id: 'activity', label: '⚡ Activity' },
-    { id: 'stats', label: '◈ Stats' },
+    { id: 'kanban', label: 'âŠž Features' },
+    { id: 'agents', label: 'â—Ž Agents' },
+    { id: 'activity', label: 'âš¡ Activity' },
+    { id: 'stats', label: 'â—ˆ Stats' },
   ]
   return (
-    <div style={{ display: 'flex', gap: 2, padding: '0 24px', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--bg-1)' }}>
+    <div style={{
+      display: 'flex',
+      gap: 2,
+      padding: isMobile ? '0 8px' : '0 24px',
+      borderBottom: '1px solid var(--border)',
+      flexShrink: 0,
+      background: 'var(--bg-1)',
+      overflowX: isMobile ? 'auto' : 'visible',
+      WebkitOverflowScrolling: 'touch',
+    }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onChange(t.id)} style={{
-          background: 'none', border: 'none', padding: '10px 14px',
-          fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer',
+          background: 'none', border: 'none', padding: isMobile ? '12px 12px' : '10px 14px',
+          minHeight: isMobile ? 44 : undefined,
+          fontFamily: 'var(--font-mono)', fontSize: isMobile ? 10 : 11, cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          touchAction: 'manipulation',
           color: active === t.id ? 'var(--accent)' : 'var(--text-dim)',
           borderBottom: active === t.id ? '2px solid var(--accent)' : '2px solid transparent',
           marginBottom: -1, transition: 'color 0.15s',
@@ -490,39 +542,40 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   )
 }
 
-// ── Main App ──────────────────────────────────────────────────────
+// â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function App() {
   const { sessions, features, activity, stats, connected, refresh } = useDashboard()
   const [tab, setTab] = useState<Tab>('kanban')
+  const isMobile = useIsMobile()
 
   const activeSessions = Object.values(sessions).filter(s => s.isActive)
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-0)' }}>
-      <Header connected={connected} activeCount={activeSessions.length} onRefresh={refresh} />
-      <StatsBar stats={stats} features={features} />
-      <TabBar active={tab} onChange={setTab} />
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--bg-0)' }}>
+      <Header connected={connected} activeCount={activeSessions.length} onRefresh={refresh} isMobile={isMobile} />
+      <StatsBar stats={stats} features={features} isMobile={isMobile} />
+      <TabBar active={tab} onChange={setTab} isMobile={isMobile} />
 
       {/* Main content */}
-      <div style={{ flex: 1, overflow: 'hidden', padding: '20px 24px' }}>
+      <div style={{ flex: 1, overflow: 'hidden', padding: isMobile ? '12px' : '20px 24px' }}>
         {tab === 'kanban' && (
-          <div style={{ height: '100%', overflowY: 'auto' }}>
-            <KanbanBoard features={features} />
+          <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', paddingBottom: isMobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}>
+            <KanbanBoard features={features} isMobile={isMobile} />
           </div>
         )}
         {tab === 'agents' && (
-          <div style={{ maxWidth: 480, height: '100%', overflowY: 'auto' }}>
+          <div style={{ maxWidth: isMobile ? '100%' : 480, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', paddingBottom: isMobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}>
             <AgentsPanel sessions={sessions} />
           </div>
         )}
         {tab === 'activity' && (
-          <div style={{ maxWidth: 600, height: '100%' }}>
+          <div style={{ maxWidth: isMobile ? '100%' : 600, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', paddingBottom: isMobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}>
             <ActivityFeed activity={activity} />
           </div>
         )}
         {tab === 'stats' && (
-          <div style={{ maxWidth: 420, height: '100%', overflowY: 'auto' }}>
+          <div style={{ maxWidth: isMobile ? '100%' : 420, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', paddingBottom: isMobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}>
             <StatsPanel stats={stats} />
           </div>
         )}
@@ -530,3 +583,5 @@ export default function App() {
     </div>
   )
 }
+
+
