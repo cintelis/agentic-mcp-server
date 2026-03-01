@@ -4,7 +4,7 @@ import { useDashboard } from './hooks'
 import { ROLE_CONFIG, TOOL_ICONS } from './types'
 import type { AgentSession, FeatureSpec, ActivityEvent, AgentStats } from './types'
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ───────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -43,7 +43,7 @@ function useIsMobile(maxWidth = 900) {
   return isMobile
 }
 
-// â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sub-components ────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
   const cfg = ROLE_CONFIG[role as keyof typeof ROLE_CONFIG]
@@ -89,7 +89,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Header ────────────────────────────────────────────────────────
 
 function Header({ connected, activeCount, onRefresh, isMobile }: { connected: boolean; activeCount: number; onRefresh: () => void; isMobile: boolean }) {
   const [tick, setTick] = useState(0)
@@ -113,7 +113,7 @@ function Header({ connected, activeCount, onRefresh, isMobile }: { connected: bo
           width: 28, height: 28, borderRadius: 6, background: 'var(--accent-dim)',
           border: '1px solid var(--accent)', display: 'grid', placeItems: 'center',
           fontSize: 14,
-        }}>â¬¡</div>
+        }}>⬡</div>
         <div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>
             MISSION CONTROL
@@ -144,7 +144,7 @@ function Header({ connected, activeCount, onRefresh, isMobile }: { connected: bo
         background: connected ? 'var(--green-dim)' : 'var(--red-dim)',
         border: `1px solid ${connected ? 'rgba(0,229,160,0.25)' : 'rgba(255,77,109,0.25)'}`,
       }}>
-        <span style={{ fontSize: 8, color: connected ? 'var(--green)' : 'var(--red)', animation: connected ? 'pulse 1.5s infinite' : 'none' }}>â—</span>
+        <span style={{ fontSize: 8, color: connected ? 'var(--green)' : 'var(--red)', animation: connected ? 'pulse 1.5s infinite' : 'none' }}>●</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: connected ? 'var(--green)' : 'var(--red)' }}>
           {connected ? 'LIVE' : 'RECONNECTING'}
         </span>
@@ -158,12 +158,12 @@ function Header({ connected, activeCount, onRefresh, isMobile }: { connected: bo
         touchAction: 'manipulation',
         cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: isMobile ? 9 : 10,
         letterSpacing: '0.05em',
-      }}>â†º REFRESH</button>
+      }}>↺ REFRESH</button>
     </div>
   )
 }
 
-// â”€â”€ Stats Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats Bar ─────────────────────────────────────────────────────
 
 function StatsBar({ stats, features, isMobile }: { stats: AgentStats | null; features: FeatureSpec[]; isMobile: boolean }) {
   const done = features.filter(f => f.status === 'done').length
@@ -175,8 +175,8 @@ function StatsBar({ stats, features, isMobile }: { stats: AgentStats | null; fea
     { label: 'FEATURES LIVE', value: String(inProg), color: 'var(--green)' },
     { label: 'IN REVIEW', value: String(inReview), color: 'var(--yellow)' },
     { label: 'SHIPPED', value: String(done), color: 'var(--purple)' },
-    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts ?? {})[0]?.[0] ?? 'â€”') : 'â€”', color: 'var(--orange)' },
-    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts ?? {})[0]?.[0]?.replace(/_/g, ' ') ?? 'â€”') : 'â€”', color: 'var(--accent)' },
+    { label: 'TOP AGENT', value: stats ? (topN(stats.agentCallCounts ?? {})[0]?.[0] ?? '—') : '—', color: 'var(--orange)' },
+    { label: 'TOP TOOL', value: stats ? (topN(stats.toolCallCounts ?? {})[0]?.[0]?.replace(/_/g, ' ') ?? '—') : '—', color: 'var(--accent)' },
   ]
 
   return (
@@ -201,7 +201,7 @@ function StatsBar({ stats, features, isMobile }: { stats: AgentStats | null; fea
   )
 }
 
-// â”€â”€ Agent Sessions Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Agent Sessions Panel ─────────────────────────────────────────
 
 function AgentsPanel({ sessions }: { sessions: Record<string, AgentSession> }) {
   const sorted = Object.values(sessions).sort((a, b) =>
@@ -244,7 +244,7 @@ function AgentsPanel({ sessions }: { sessions: Record<string, AgentSession> }) {
   )
 }
 
-// â”€â”€ Kanban Board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Kanban Board ──────────────────────────────────────────────────
 
 function TaskChip({ task }: { task: FeatureSpec['tasks'][0] }) {
   const colors: Record<string, string> = { todo: 'var(--text-dim)', 'in-progress': 'var(--accent)', done: 'var(--green)', blocked: 'var(--red)' }
@@ -297,16 +297,16 @@ function KanbanCard({ feature, isMobile }: { feature: FeatureSpec; isMobile: boo
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', paddingTop: 2, flexShrink: 0 }}>{feature.id}</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{feature.title}</span>
-          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>{open ? 'â–²' : 'â–¼'}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
         </div>
         {/* Progress bar */}
         <div style={{ height: 3, background: 'var(--bg-3)', borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? 'var(--green)' : 'var(--accent)', transition: 'width 0.4s ease', borderRadius: 2 }} />
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{progress}% Â· {feature.tasks.length} tasks</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{progress}% · {feature.tasks.length} tasks</span>
           {feature.githubBranch && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: isMobile ? '3px 7px' : '1px 5px', borderRadius: 3 }}>âŽ‡ {feature.githubBranch}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: isMobile ? '3px 7px' : '1px 5px', borderRadius: 3 }}>⎇ {feature.githubBranch}</span>
           )}
           {feature.githubPR && (
             <a
@@ -322,9 +322,9 @@ function KanbanCard({ feature, isMobile }: { feature: FeatureSpec; isMobile: boo
                 touchAction: 'manipulation',
               }}
             >
-              {feature.githubPR.state === 'merged' ? 'â›™' : feature.githubPR.draft ? 'âŠ˜' : 'âŽ‡'} PR #{feature.githubPR.number}
-              {feature.githubPR.reviewState === 'approved' && ' âœ“'}
-              {feature.githubPR.reviewState === 'changes_requested' && ' âœ—'}
+              {feature.githubPR.state === 'merged' ? '⛙' : feature.githubPR.draft ? '⊘' : '⎇'} PR #{feature.githubPR.number}
+              {feature.githubPR.reviewState === 'approved' && ' ✓'}
+              {feature.githubPR.reviewState === 'changes_requested' && ' ✗'}
             </a>
           )}
         </div>
@@ -377,7 +377,7 @@ function KanbanBoard({ features, isMobile }: { features: FeatureSpec[]; isMobile
   )
 }
 
-// â”€â”€ Activity Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Activity Feed ─────────────────────────────────────────────────
 
 function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -400,7 +400,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
         {activity.map((evt, i) => {
           const roleCfg = ROLE_CONFIG[evt.agentRole]
           const isNew = newIds.has(evt.id)
-          const icon = TOOL_ICONS[evt.tool] ?? 'ðŸ”§'
+          const icon = TOOL_ICONS[evt.tool] ?? '🔧'
           return (
             <div key={evt.id ?? i} style={{
               display: 'flex', gap: 8, alignItems: 'flex-start',
@@ -414,7 +414,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: roleCfg?.color ?? 'var(--text-secondary)' }}>{evt.agentName}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>â†’</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>→</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>{evt.tool.replace(/_/g, ' ')}</span>
                   {evt.featureId && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '1px 4px', borderRadius: 3 }}>{evt.featureId}</span>}
                   {!evt.success && <span style={{ fontSize: 9, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>ERR</span>}
@@ -437,7 +437,7 @@ function ActivityFeed({ activity }: { activity: ActivityEvent[] }) {
   )
 }
 
-// â”€â”€ Stats Charts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats Charts ──────────────────────────────────────────────────
 
 function HourlyChart({ data }: { data: number[] | null | undefined }) {
   const safeData = data && data.length === 24 ? data : new Array(24).fill(0)
@@ -493,7 +493,7 @@ function TopList({ title, data, color }: { title: string; data: [string, number]
 }
 
 function StatsPanel({ stats }: { stats: AgentStats | null }) {
-  if (!stats) return <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading statsâ€¦</div>
+  if (!stats) return <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading stats…</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <HourlyChart data={stats.hourlyActivity} />
@@ -504,16 +504,16 @@ function StatsPanel({ stats }: { stats: AgentStats | null }) {
   )
 }
 
-// â”€â”€ Tab Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab Bar ───────────────────────────────────────────────────────
 
 type Tab = 'kanban' | 'agents' | 'activity' | 'stats'
 
 function TabBar({ active, onChange, isMobile }: { active: Tab; onChange: (t: Tab) => void; isMobile: boolean }) {
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'kanban', label: 'âŠž Features' },
-    { id: 'agents', label: 'â—Ž Agents' },
-    { id: 'activity', label: 'âš¡ Activity' },
-    { id: 'stats', label: 'â—ˆ Stats' },
+    { id: 'kanban', label: '⊞ Features' },
+    { id: 'agents', label: '◎ Agents' },
+    { id: 'activity', label: '⚡ Activity' },
+    { id: 'stats', label: '◈ Stats' },
   ]
   return (
     <div style={{
@@ -542,7 +542,7 @@ function TabBar({ active, onChange, isMobile }: { active: Tab; onChange: (t: Tab
   )
 }
 
-// â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main App ──────────────────────────────────────────────────────
 
 export default function App() {
   const { sessions, features, activity, stats, connected, refresh } = useDashboard()
@@ -583,5 +583,3 @@ export default function App() {
     </div>
   )
 }
-
-
