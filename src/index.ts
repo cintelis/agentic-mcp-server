@@ -17,7 +17,7 @@ import {
 // ── DashboardBroadcaster ─────────────────────────────────────────
 export class DashboardBroadcaster {
   private connections = new Set<WebSocket>();
-  constructor(private readonly state: DurableObjectState, private readonly env: Env) {}
+  constructor(private readonly doState: DurableObjectState, private readonly env: Env) {}
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -36,7 +36,7 @@ export class DashboardBroadcaster {
         return new Response("Expected WebSocket", { status: 426 });
       }
       const { 0: client, 1: server } = new WebSocketPair();
-      this.state.acceptWebSocket(server);
+      this.doState.acceptWebSocket(server);
       this.connections.add(server);
       server.addEventListener("close", () => this.connections.delete(server));
       server.addEventListener("error", () => this.connections.delete(server));
@@ -47,30 +47,34 @@ export class DashboardBroadcaster {
 }
 
 // ── AgenticMcpAgent ──────────────────────────────────────────────
-export class AgenticMcpAgent extends McpAgent {
+export class AgenticMcpAgent extends McpAgent<Env> {
   server = new McpServer({ name: "agentic-mcp-server", version: "1.0.0" });
   private session!: SessionState;
   private gh!: GitHubClient;
 
-  async init() {
-    this.gh = new GitHubClient(this.env.GITHUB_TOKEN);
+  // Typed accessors — McpAgent base class exposes these as unknown without generics
+  private get e(): Env { return this.env as Env; }
+  private get doCtx(): DurableObjectState { return (this as unknown as { ctx: DurableObjectState }).ctx; }
 
-    const stored = await this.ctx.storage.get<SessionState>("session");
+  async init() {
+    this.gh = new GitHubClient(this.e.GITHUB_TOKEN);
+
+    const stored = await this.doCtx.storage.get<SessionState>("session");
     if (stored) {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      const url = new URL(this.ctx.id.toString());
+      const url = new URL(this.doCtx.id.toString());
       const role = (url.searchParams.get("role") as AgentRole) ?? "orchestrator";
       const agentName = url.searchParams.get("name") ?? "unknown-agent";
       this.session = {
-        sessionId: this.ctx.id.toString(), agentRole: role, agentName,
+        sessionId: this.doCtx.id.toString(), agentRole: role, agentName,
         createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(),
         tasksCompleted: [], notes: "",
       };
     }
     await this.persistSession();
-    await registerSession(this.env.SHARED_CONTEXT, {
+    await registerSession(this.e.SHARED_CONTEXT, {
       sessionId: this.session.sessionId, agentRole: this.session.agentRole,
       agentName: this.session.agentName, createdAt: this.session.createdAt,
       lastActiveAt: this.session.lastActiveAt, currentFeature: this.session.currentFeature,
@@ -101,9 +105,9 @@ export class AgenticMcpAgent extends McpAgent {
         agentName: this.session.agentName,
         tool, featureId, taskId, durationMs, success,
       };
-      logActivity(this.env.SHARED_CONTEXT, evt).catch(() => {});
+      logActivity(this.e.SHARED_CONTEXT, evt).catch(() => {});
       this.broadcast({ type: "tool_call", ...evt }).catch(() => {});
-      touchSession(this.env.SHARED_CONTEXT, this.session.sessionId, {
+      touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
         lastActiveAt: new Date().toISOString(),
         ...(featureId ? { currentFeature: featureId } : {}),
         ...(taskId ? { currentTask: taskId } : {}),
@@ -112,8 +116,8 @@ export class AgenticMcpAgent extends McpAgent {
   }
 
   private async broadcast(event: object): Promise<void> {
-    const id = this.env.DASHBOARD_BROADCASTER.idFromName("global");
-    const stub = this.env.DASHBOARD_BROADCASTER.get(id);
+    const id = this.e.DASHBOARD_BROADCASTER.idFromName("global");
+    const stub = this.e.DASHBOARD_BROADCASTER.get(id);
     await stub.fetch("https://internal/broadcast", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,7 +153,7 @@ export class AgenticMcpAgent extends McpAgent {
       GetFeatureSpecInput.shape,
       async (args: z.infer<typeof GetFeatureSpecInput>) =>
         this.callTool("get_feature_spec", args.featureId, undefined, async () => {
-          const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
+          const spec = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
           if (!spec) return this.err(`Feature '${args.featureId}' not found.`);
           return this.ok(JSON.stringify(spec, null, 2));
         })
@@ -162,10 +166,10 @@ export class AgenticMcpAgent extends McpAgent {
       ListFeaturesInput.shape,
       async (args: z.infer<typeof ListFeaturesInput>) =>
         this.callTool("list_features", undefined, undefined, async () => {
-          const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
+          const index = await this.e.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
           const features: FeatureSpec[] = [];
           for (const id of index) {
-            const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
+            const spec = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
             if (spec && (args.status === "all" || spec.status === args.status)) features.push(spec);
           }
           if (features.length === 0) return this.ok("No features found.");
@@ -184,7 +188,7 @@ export class AgenticMcpAgent extends McpAgent {
       async (args: z.infer<typeof UpsertFeatureSpecInput>) =>
         this.callTool("upsert_feature_spec", args.id, undefined, async () => {
           const id = args.id ?? `feat-${Date.now()}`;
-          const existing = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
+          const existing = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
           const tasks: Task[] = (args.tasks ?? existing?.tasks ?? []).map((t: Task, i: number) => ({
             id: `${id}-task-${i + 1}`,
             title: t.title,
@@ -204,11 +208,11 @@ export class AgenticMcpAgent extends McpAgent {
             githubPR: existing?.githubPR,
           };
           spec.assignedAgents[this.session.agentRole] = this.session.agentName;
-          await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
-          const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
+          await this.e.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
+          const index = await this.e.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
           if (!index.includes(id)) {
             index.push(id);
-            await this.env.SHARED_CONTEXT.put(KV_KEYS.featureIndex, JSON.stringify(index));
+            await this.e.SHARED_CONTEXT.put(KV_KEYS.featureIndex, JSON.stringify(index));
           }
           this.session.currentFeature = id;
           await this.persistSession();
@@ -224,7 +228,7 @@ export class AgenticMcpAgent extends McpAgent {
       UpdateTaskStatusInput.shape,
       async (args: z.infer<typeof UpdateTaskStatusInput>) =>
         this.callTool("update_task_status", args.featureId, args.taskId, async () => {
-          const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
+          const spec = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(args.featureId), "json");
           if (!spec) return this.err(`Feature '${args.featureId}' not found.`);
           const task = spec.tasks.find((t: Task) => t.id === args.taskId);
           if (!task) return this.err(`Task '${args.taskId}' not found.`);
@@ -235,7 +239,7 @@ export class AgenticMcpAgent extends McpAgent {
             this.session.tasksCompleted.push(args.taskId);
           }
           spec.updatedAt = new Date().toISOString();
-          await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(args.featureId), JSON.stringify(spec));
+          await this.e.SHARED_CONTEXT.put(KV_KEYS.featureSpec(args.featureId), JSON.stringify(spec));
           await this.persistSession();
           this.broadcast({
             type: "task_updated", featureId: args.featureId, taskId: args.taskId,
@@ -267,7 +271,7 @@ export class AgenticMcpAgent extends McpAgent {
       async (args: z.infer<typeof ReadSharedMemoryInput>) =>
         this.callTool("read_shared_memory", undefined, undefined, async () => {
           const key = args.role ? KV_KEYS.agentMemory(args.role) : KV_KEYS.sharedNotes;
-          const content = await this.env.SHARED_CONTEXT.get(key);
+          const content = await this.e.SHARED_CONTEXT.get(key);
           return this.ok(content ?? `No memory at '${key}'.`);
         })
     );
@@ -282,10 +286,10 @@ export class AgenticMcpAgent extends McpAgent {
           const key = args.role ? KV_KEYS.agentMemory(args.role) : KV_KEYS.sharedNotes;
           let finalContent = args.content;
           if (args.append) {
-            const existing = await this.env.SHARED_CONTEXT.get(key);
+            const existing = await this.e.SHARED_CONTEXT.get(key);
             if (existing) finalContent = `${existing}\n\n---\n\n${args.content}`;
           }
-          await this.env.SHARED_CONTEXT.put(key, finalContent);
+          await this.e.SHARED_CONTEXT.put(key, finalContent);
           this.broadcast({
             type: "memory_written", key, role: args.role,
             agentName: this.session.agentName, timestamp: new Date().toISOString(),
@@ -317,9 +321,9 @@ export class AgenticMcpAgent extends McpAgent {
           }
           const conventions = await this.getConventions();
           try {
-            (conventions as Record<string, unknown>)[args.section] = JSON.parse(args.content);
+            (conventions as unknown as Record<string, unknown>)[args.section] = JSON.parse(args.content);
             conventions.lastUpdated = new Date().toISOString();
-            await this.env.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(conventions));
+            await this.e.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(conventions));
             return this.ok(`Conventions section '${args.section}' updated.`);
           } catch {
             return this.err("Invalid JSON for conventions section.");
@@ -434,13 +438,13 @@ export class AgenticMcpAgent extends McpAgent {
   }
 
   private async cachePROnFeature(branchName: string, pr: GitHubPR): Promise<void> {
-    const index = await this.env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
+    const index = await this.e.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
     for (const id of index) {
-      const spec = await this.env.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
+      const spec = await this.e.SHARED_CONTEXT.get<FeatureSpec>(KV_KEYS.featureSpec(id), "json");
       if (spec?.githubBranch === branchName) {
         spec.githubPR = pr;
         spec.updatedAt = new Date().toISOString();
-        await this.env.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
+        await this.e.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
         this.broadcast({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
         break;
       }
@@ -448,9 +452,9 @@ export class AgenticMcpAgent extends McpAgent {
   }
 
   private async getConventions(): Promise<ProjectConventions> {
-    const stored = await this.env.SHARED_CONTEXT.get<ProjectConventions>(KV_KEYS.conventions, "json");
+    const stored = await this.e.SHARED_CONTEXT.get<ProjectConventions>(KV_KEYS.conventions, "json");
     if (!stored) {
-      await this.env.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(DEFAULT_CONVENTIONS));
+      await this.e.SHARED_CONTEXT.put(KV_KEYS.conventions, JSON.stringify(DEFAULT_CONVENTIONS));
       return DEFAULT_CONVENTIONS;
     }
     return stored;
@@ -458,7 +462,7 @@ export class AgenticMcpAgent extends McpAgent {
 
   private async persistSession(): Promise<void> {
     this.session.lastActiveAt = new Date().toISOString();
-    await this.ctx.storage.put("session", this.session);
+    await this.doCtx.storage.put("session", this.session);
   }
 }
 
