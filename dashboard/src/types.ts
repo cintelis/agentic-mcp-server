@@ -1,6 +1,6 @@
 // dashboard/src/types.ts
 
-export type AgentRole = 'planner' | 'frontend' | 'backend' | 'tester' | 'reviewer' | 'orchestrator'
+export type AgentRole = 'planner' | 'frontend' | 'backend' | 'tester' | 'devops' | 'reviewer' | 'orchestrator'
 
 export interface AgentSession {
   sessionId: string
@@ -91,6 +91,7 @@ export const ROLE_CONFIG: Record<AgentRole, { label: string; color: string; bg: 
   frontend:     { label: 'Frontend',     color: 'var(--green)',   bg: 'var(--green-dim)' },
   backend:      { label: 'Backend',      color: 'var(--purple)',  bg: 'var(--purple-dim)' },
   tester:       { label: 'Tester',       color: 'var(--yellow)',  bg: 'var(--yellow-dim)' },
+  devops:       { label: 'DevOps',       color: 'var(--orange)',  bg: 'var(--orange-dim)' },
   reviewer:     { label: 'Reviewer',     color: 'var(--orange)',  bg: 'var(--orange-dim)' },
   orchestrator: { label: 'Orchestrator', color: 'var(--red)',     bg: 'var(--red-dim)' },
 }
