@@ -6,9 +6,10 @@
 /** Which agent role is connected to this session */
 export type AgentRole =
   | "planner"       // Claude — spec writing, task breakdown
-  | "frontend"      // Claude Code / Roo Code — Cloudflare Workers & Pages
-  | "backend"       // CodeGPT (GPT-5.2-Codex) — Cloud Run & Firestore
-  | "tester"        // Test generation & debug
+  | "frontend"      // Claude Code — Cloudflare Workers & Pages
+  | "backend"       // Codex CLI — Cloud Run & Firestore
+  | "tester"        // Codex CLI — test generation & debug
+  | "devops"        // Codex CLI — GitHub Actions, deployments, infra
   | "reviewer"      // PR review, security checks
   | "orchestrator"; // Coordinates other agents (human or lead agent)
 
@@ -65,6 +66,8 @@ export interface ProjectConventions {
     regionDefault: string;
   };
   github: {
+    repo: string;                  // "owner/repo" e.g. "nick-598/agentic-mcp-server"
+    defaultBranch: string;         // "main"
     branchNamingConvention: string;
     commitMessageFormat: string;
     prTemplate: string;

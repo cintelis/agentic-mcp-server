@@ -34,7 +34,7 @@ export const UpsertFeatureSpecInput = z.object({
         title: z.string(),
         description: z.string(),
         assignedRole: z.enum([
-          "planner", "frontend", "backend", "tester", "reviewer", "orchestrator",
+          "planner", "frontend", "backend", "tester", "devops", "reviewer", "orchestrator",
         ]),
       })
     )

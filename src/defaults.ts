@@ -56,6 +56,8 @@ export const DEFAULT_CONVENTIONS: ProjectConventions = {
   },
 
   github: {
+    repo: "nick-598/agentic-mcp-server",
+    defaultBranch: "main",
     branchNamingConvention: "feat/short-description | fix/issue-description | chore/description",
     commitMessageFormat:
       "type(scope): short description\n\n" +
