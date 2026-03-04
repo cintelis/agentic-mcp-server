@@ -68,7 +68,7 @@ function defaultStats(): AgentStats {
     agentCallCounts: {},
     roleCallCounts: {
       planner: 0, frontend: 0, backend: 0,
-      tester: 0, reviewer: 0, orchestrator: 0,
+      tester: 0, devops: 0, reviewer: 0, orchestrator: 0,
     },
     featureActivityCounts: {},
     dailyCounts: {},

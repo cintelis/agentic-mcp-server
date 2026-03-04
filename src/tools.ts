@@ -64,7 +64,7 @@ export const UpdateSessionNotesInput = z.object({
 
 export const ReadSharedMemoryInput = z.object({
   role: z
-    .enum(["planner", "frontend", "backend", "tester", "reviewer", "orchestrator"])
+    .enum(["planner", "frontend", "backend", "tester", "devops", "reviewer", "orchestrator"])
     .optional()
     .describe("Read memory for a specific agent role. Omit to read shared notes."),
 });
@@ -75,7 +75,7 @@ export const WriteSharedMemoryInput = z.object({
     "Use for important decisions, interfaces, or cross-agent handoff notes."
   ),
   role: z
-    .enum(["planner", "frontend", "backend", "tester", "reviewer", "orchestrator"])
+    .enum(["planner", "frontend", "backend", "tester", "devops", "reviewer", "orchestrator"])
     .optional()
     .describe("Write to a role-specific memory slot. Omit to write to shared notes."),
   append: z.boolean().default(false).describe("Append to existing content instead of replacing"),
