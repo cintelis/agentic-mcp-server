@@ -64,9 +64,12 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      // role and name are passed as props via _init() before this runs
-      const role = ((this.props as Record<string, string>)?.role as AgentRole) ?? "orchestrator";
-      const agentName = (this.props as Record<string, string>)?.name ?? "unknown-agent";
+      // role and name stored in KV by main worker before this DO was called
+      const doKey = this.doCtx.id.name ?? "orchestrator:unknown-agent";
+      const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
+      const identity = identityJson ? JSON.parse(identityJson) as { role: string; name: string } : { role: "orchestrator", name: "unknown-agent" };
+      const role = identity.role as AgentRole;
+      const agentName = identity.name;
       this.session = {
         sessionId: this.doCtx.id.toString(), agentRole: role, agentName,
         createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(),
@@ -516,9 +519,15 @@ export default {
       const doKey = sessionParam ?? `${role}:${name}`;
       const doId = env.MCP_AGENT.idFromName(doKey);
       const stub = env.MCP_AGENT.get(doId);
-      // Pass role/name as props so init() can read them via this.props
-      await stub._init({ role, name });
-      return corsResponse(await stub.fetch(request));
+      // Store role/name in KV so init() can read them (DO storage not writable before init)
+      await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, JSON.stringify({ role, name }));
+      // Rewrite /mcp -> /streamable-http (what McpAgent base class actually handles)
+      // Keep /sse as /sse. Preserve all headers and body.
+      const targetPath = url.pathname === "/sse" ? "/sse" : "/streamable-http";
+      const targetUrl = new URL(request.url);
+      targetUrl.pathname = targetPath;
+      const forwardedRequest = new Request(targetUrl.toString(), request);
+      return corsResponse(await stub.fetch(forwardedRequest));
     }
     if (url.pathname === "/") {
       return corsResponse(Response.json({
