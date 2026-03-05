@@ -518,11 +518,11 @@ export default {
       const doKey = sessionParam ?? `${role}:${name}`;
       // Store role/name in KV so init() can read them
       await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, JSON.stringify({ role, name }));
-      // Use McpAgent.serve() handler which correctly handles HTTP POST for streamable-http
+      // Use McpAgent.serve() handler — pass doKey as sessionId so it uses idFromName
       const mcpHandler = AgenticMcpAgent.serve("/mcp", { binding: "MCP_AGENT" });
-      // Rewrite URL to /mcp for the serve handler, preserving query params
       const serveUrl = new URL(request.url);
       serveUrl.pathname = "/mcp";
+      serveUrl.searchParams.set("sessionId", doKey);
       const serveRequest = new Request(serveUrl.toString(), request);
       return corsResponse(await mcpHandler.fetch(serveRequest, env, _ctx));
     }
