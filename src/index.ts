@@ -535,6 +535,18 @@ async function handleDashboardApi(url: URL, env: Env): Promise<Response> {
   if (path === "/stats") {
     return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.stats, "json") ?? {});
   }
+  if (path === "/memory") {
+    const role = url.searchParams.get("role");
+    const key = role ? KV_KEYS.agentMemory(role as AgentRole) : KV_KEYS.sharedNotes;
+    const content = await env.SHARED_CONTEXT.get(key);
+    return Response.json({ key, content: content ?? "" });
+  }
+  if (path === "/memory/clear" && request.method === "POST") {
+    const role = url.searchParams.get("role");
+    const key = role ? KV_KEYS.agentMemory(role as AgentRole) : KV_KEYS.sharedNotes;
+    await env.SHARED_CONTEXT.put(key, "");
+    return Response.json({ ok: true, key });
+  }
   return Response.json({ error: "Unknown endpoint" }, { status: 404 });
 }
 
