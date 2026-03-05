@@ -66,8 +66,11 @@ export class AgenticMcpAgent extends McpAgent<Env> {
     } else {
       // DO name is "streamable-http:<doKey>" or "sse:<doKey>" — strip the prefix to get doKey
       const rawName = this.doCtx.id.name ?? "";
+      console.log("[AgenticMcpAgent] rawName:", rawName);
       const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "orchestrator:unknown-agent";
+      console.log("[AgenticMcpAgent] doKey:", doKey);
       const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
+      console.log("[AgenticMcpAgent] identityJson:", identityJson);
       const identity = identityJson ? JSON.parse(identityJson) as { role: string; name: string } : { role: "orchestrator", name: "unknown-agent" };
       const role = identity.role as AgentRole;
       const agentName = identity.name;
