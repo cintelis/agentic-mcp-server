@@ -511,23 +511,20 @@ export default {
     if (url.pathname.startsWith("/dashboard/api")) {
       return corsResponse(await handleDashboardApi(url, env));
     }
-    if (url.pathname === "/mcp" || url.pathname === "/sse") {
+    if (url.pathname === "/mcp" || url.pathname === "/sse" || url.pathname.startsWith("/mcp/")) {
       const role = url.searchParams.get("role") ?? "orchestrator";
       const name = url.searchParams.get("name") ?? "unknown-agent";
       const sessionParam = url.searchParams.get("session");
-      // Use role+name as stable DO key so each agent role gets its own persistent DO
       const doKey = sessionParam ?? `${role}:${name}`;
-      const doId = env.MCP_AGENT.idFromName(doKey);
-      const stub = env.MCP_AGENT.get(doId);
-      // Store role/name in KV so init() can read them (DO storage not writable before init)
+      // Store role/name in KV so init() can read them
       await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, JSON.stringify({ role, name }));
-      // Rewrite /mcp -> /streamable-http (what McpAgent base class actually handles)
-      // Keep /sse as /sse. Preserve all headers and body.
-      const targetPath = url.pathname === "/sse" ? "/sse" : "/streamable-http";
-      const targetUrl = new URL(request.url);
-      targetUrl.pathname = targetPath;
-      const forwardedRequest = new Request(targetUrl.toString(), request);
-      return corsResponse(await stub.fetch(forwardedRequest));
+      // Use McpAgent.serve() handler which correctly handles HTTP POST for streamable-http
+      const mcpHandler = AgenticMcpAgent.serve("/mcp", { binding: "MCP_AGENT" });
+      // Rewrite URL to /mcp for the serve handler, preserving query params
+      const serveUrl = new URL(request.url);
+      serveUrl.pathname = "/mcp";
+      const serveRequest = new Request(serveUrl.toString(), request);
+      return corsResponse(await mcpHandler.fetch(serveRequest, env, _ctx));
     }
     if (url.pathname === "/") {
       return corsResponse(Response.json({
