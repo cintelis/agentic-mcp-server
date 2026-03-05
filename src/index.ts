@@ -64,9 +64,9 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      // role and name are stored during fetch() before init() is called
-      const role = (await this.doCtx.storage.get<string>("pendingRole") as AgentRole) ?? "orchestrator";
-      const agentName = (await this.doCtx.storage.get<string>("pendingName")) ?? "unknown-agent";
+      // role and name are passed as props via _init() before this runs
+      const role = ((this.props as Record<string, string>)?.role as AgentRole) ?? "orchestrator";
+      const agentName = (this.props as Record<string, string>)?.name ?? "unknown-agent";
       this.session = {
         sessionId: this.doCtx.id.toString(), agentRole: role, agentName,
         createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(),
@@ -466,17 +466,6 @@ export class AgenticMcpAgent extends McpAgent<Env> {
     await this.doCtx.storage.put("session", this.session);
   }
 
-  // Handle set-identity pre-init call from main fetch handler
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/set-identity" && request.method === "POST") {
-      const { role, name } = await request.json() as { role: string; name: string };
-      await this.doCtx.storage.put("pendingRole", role);
-      await this.doCtx.storage.put("pendingName", name);
-      return new Response("ok");
-    }
-    return super.fetch(request);
-  }
 }
 
 // ── Dashboard API ────────────────────────────────────────────────
@@ -527,12 +516,8 @@ export default {
       const doKey = sessionParam ?? `${role}:${name}`;
       const doId = env.MCP_AGENT.idFromName(doKey);
       const stub = env.MCP_AGENT.get(doId);
-      // Store role/name before init() runs so init() can read them from storage
-      await stub.fetch(new Request("https://internal/set-identity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, name }),
-      }));
+      // Pass role/name as props so init() can read them via this.props
+      await stub._init({ role, name });
       return corsResponse(await stub.fetch(request));
     }
     if (url.pathname === "/") {
