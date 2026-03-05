@@ -514,7 +514,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
 }
 
 // ── Dashboard API ────────────────────────────────────────────────
-async function handleDashboardApi(url: URL, env: Env): Promise<Response> {
+async function handleDashboardApi(url: URL, env: Env, request?: Request): Promise<Response> {
   const path = url.pathname.replace("/dashboard/api", "");
   if (path === "/sessions") {
     return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.sessionRegistry, "json") ?? { sessions: {} });
@@ -563,7 +563,7 @@ export default {
       return env.DASHBOARD_BROADCASTER.get(id).fetch(new Request("https://internal/ws", request));
     }
     if (url.pathname.startsWith("/dashboard/api")) {
-      return corsResponse(await handleDashboardApi(url, env));
+      return corsResponse(await handleDashboardApi(url, env, request));
     }
     if (url.pathname === "/mcp" || url.pathname === "/sse" || url.pathname.startsWith("/mcp/")) {
       const role = url.searchParams.get("role") ?? "orchestrator";
