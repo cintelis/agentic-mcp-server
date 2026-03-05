@@ -64,9 +64,9 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      const url = new URL(this.doCtx.id.toString());
-      const role = (url.searchParams.get("role") as AgentRole) ?? "orchestrator";
-      const agentName = url.searchParams.get("name") ?? "unknown-agent";
+      // role and name are stored during fetch() before init() is called
+      const role = (await this.doCtx.storage.get<string>("pendingRole") as AgentRole) ?? "orchestrator";
+      const agentName = (await this.doCtx.storage.get<string>("pendingName")) ?? "unknown-agent";
       this.session = {
         sessionId: this.doCtx.id.toString(), agentRole: role, agentName,
         createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(),
@@ -465,6 +465,18 @@ export class AgenticMcpAgent extends McpAgent<Env> {
     this.session.lastActiveAt = new Date().toISOString();
     await this.doCtx.storage.put("session", this.session);
   }
+
+  // Handle set-identity pre-init call from main fetch handler
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/set-identity" && request.method === "POST") {
+      const { role, name } = await request.json() as { role: string; name: string };
+      await this.doCtx.storage.put("pendingRole", role);
+      await this.doCtx.storage.put("pendingName", name);
+      return new Response("ok");
+    }
+    return super.fetch(request);
+  }
 }
 
 // ── Dashboard API ────────────────────────────────────────────────
@@ -508,9 +520,20 @@ export default {
       return corsResponse(await handleDashboardApi(url, env));
     }
     if (url.pathname === "/mcp" || url.pathname === "/sse") {
+      const role = url.searchParams.get("role") ?? "orchestrator";
+      const name = url.searchParams.get("name") ?? "unknown-agent";
       const sessionParam = url.searchParams.get("session");
-      const doId = sessionParam ? env.MCP_AGENT.idFromName(sessionParam) : env.MCP_AGENT.newUniqueId();
-      return corsResponse(await env.MCP_AGENT.get(doId).fetch(request));
+      // Use role+name as stable DO key so each agent role gets its own persistent DO
+      const doKey = sessionParam ?? `${role}:${name}`;
+      const doId = env.MCP_AGENT.idFromName(doKey);
+      const stub = env.MCP_AGENT.get(doId);
+      // Store role/name before init() runs so init() can read them from storage
+      await stub.fetch(new Request("https://internal/set-identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, name }),
+      }));
+      return corsResponse(await stub.fetch(request));
     }
     if (url.pathname === "/") {
       return corsResponse(Response.json({
