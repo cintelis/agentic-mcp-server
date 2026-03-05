@@ -482,21 +482,24 @@ export class AgenticMcpAgent extends McpAgent<Env> {
   }
 
   async onStart(): Promise<void> {
-    // Called on every DO activation — update agentName/role from KV in case init() was skipped
-    const rawName = this.doCtx.id.name ?? "";
-    const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "";
-    if (!doKey) return;
-    const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
-    if (!identityJson) return;
-    const identity = JSON.parse(identityJson) as { role: string; name: string };
-    if (this.session && (this.session.agentName === "unknown-agent" || !this.session.agentName)) {
-      this.session.agentRole = identity.role as AgentRole;
-      this.session.agentName = identity.name;
-      await this.persistSession();
-      await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
-        lastActiveAt: this.session.lastActiveAt,
-      });
-    }
+    // Guard against being called before init()
+    if (!this.e || !this.session) return;
+    try {
+      const rawName = this.doCtx.id.name ?? "";
+      const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "";
+      if (!doKey) return;
+      const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
+      if (!identityJson) return;
+      const identity = JSON.parse(identityJson) as { role: string; name: string };
+      if (this.session.agentName === "unknown-agent" || !this.session.agentName) {
+        this.session.agentRole = identity.role as AgentRole;
+        this.session.agentName = identity.name;
+        await this.persistSession();
+        await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
+          lastActiveAt: this.session.lastActiveAt,
+        });
+      }
+    } catch { /* never throw from onStart */ }
   }
 
   async fetch(request: Request): Promise<Response> {
