@@ -64,8 +64,9 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      // role and name stored in KV by main worker before this DO was called
-      const doKey = this.doCtx.id.name ?? "orchestrator:unknown-agent";
+      // DO name is "streamable-http:<doKey>" or "sse:<doKey>" — strip the prefix to get doKey
+      const rawName = this.doCtx.id.name ?? "";
+      const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "orchestrator:unknown-agent";
       const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
       const identity = identityJson ? JSON.parse(identityJson) as { role: string; name: string } : { role: "orchestrator", name: "unknown-agent" };
       const role = identity.role as AgentRole;
