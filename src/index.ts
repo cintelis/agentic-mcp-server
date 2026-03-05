@@ -520,7 +520,9 @@ export class AgenticMcpAgent extends McpAgent<Env> {
 async function handleDashboardApi(url: URL, env: Env, request?: Request): Promise<Response> {
   const path = url.pathname.replace("/dashboard/api", "");
   if (path === "/sessions") {
-    return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.sessionRegistry, "json") ?? { sessions: {} });
+    const sessionsRaw = await env.SHARED_CONTEXT.get(KV_KEYS.sessionRegistry);
+    const sessions = sessionsRaw ? JSON.parse(sessionsRaw) : { sessions: {} };
+    return Response.json(sessions);
   }
   if (path === "/features") {
     const index = await env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
@@ -536,7 +538,9 @@ async function handleDashboardApi(url: URL, env: Env, request?: Request): Promis
     return Response.json((await env.SHARED_CONTEXT.get<object[]>(KV_KEYS.activityLog, "json") ?? []).slice(0, limit));
   }
   if (path === "/stats") {
-    return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.stats, "json") ?? {});
+    const statsRaw = await env.SHARED_CONTEXT.get(KV_KEYS.stats);
+    const stats = statsRaw ? JSON.parse(statsRaw) : {};
+    return Response.json(stats);
   }
   if (path === "/memory") {
     const role = url.searchParams.get("role");
@@ -558,43 +562,6 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return corsResponse(new Response(null, { status: 204 }));
-    if (url.pathname === "/debug/mcp") {
-      const role = url.searchParams.get("role") ?? "orchestrator";
-      const roleNameMap: Record<string, string> = {
-        orchestrator: "claude-orchestrator",
-        planner: "claude-planner",
-        frontend: "claude-frontend",
-        reviewer: "claude-reviewer",
-        backend: "codex-backend",
-        tester: "codex-tester",
-        devops: "codex-devops",
-      };
-      const name = url.searchParams.get("name") ?? roleNameMap[role] ?? `claude-${role}`;
-      const sessionParam = url.searchParams.get("session");
-      const doKey = sessionParam ?? `${role}:${name}`;
-      const targetPath = url.searchParams.get("path") ?? "";
-      const inferredTransport =
-        targetPath === "/sse" || targetPath.startsWith("/sse/")
-          ? "sse"
-          : (targetPath === "/mcp" || targetPath.startsWith("/mcp/") ? "streamable-http" : "unknown");
-      return corsResponse(Response.json({
-        ok: true,
-        timestamp: new Date().toISOString(),
-        method: request.method,
-        pathname: url.pathname,
-        search: url.search,
-        inferredTransport,
-        targetPath,
-        inferredIdentity: { role, name, session: sessionParam ?? null, doKey },
-        mcpHeaders: {
-          accept: request.headers.get("accept"),
-          contentType: request.headers.get("content-type"),
-          mcpSessionId: request.headers.get("mcp-session-id"),
-          xPartykitRoom: request.headers.get("x-partykit-room"),
-          userAgent: request.headers.get("user-agent"),
-        },
-      }));
-    }
     if (url.pathname === "/health") {
       return corsResponse(Response.json({ status: "ok", environment: env.ENVIRONMENT, timestamp: new Date().toISOString() }));
     }
@@ -605,9 +572,9 @@ export default {
     if (url.pathname.startsWith("/dashboard/api")) {
       return corsResponse(await handleDashboardApi(url, env, request));
     }
-    if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/") || url.pathname === "/sse" || url.pathname.startsWith("/sse/")) {
+    if (url.pathname === "/mcp" || url.pathname === "/sse" || url.pathname.startsWith("/mcp/")) {
       const role = url.searchParams.get("role") ?? "orchestrator";
-      // Keep explicit name if provided; otherwise derive from role.
+      // Derive name from role — mcp-remote strips query params so we can't rely on name being forwarded
       const roleNameMap: Record<string, string> = {
         orchestrator: "claude-orchestrator",
         planner: "claude-planner",
@@ -617,25 +584,16 @@ export default {
         tester: "codex-tester",
         devops: "codex-devops",
       };
-      const name = url.searchParams.get("name") ?? roleNameMap[role] ?? `claude-${role}`;
+      const name = roleNameMap[role] ?? `claude-${role}`;
       const sessionParam = url.searchParams.get("session");
       const doKey = sessionParam ?? `${role}:${name}`;
       // Store role/name in KV — both by doKey AND by role alone so init() can find it
       const identity = JSON.stringify({ role, name });
       await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, identity, { expirationTtl: 86400 });
       await env.SHARED_CONTEXT.put(`agent-role:${role}`, identity, { expirationTtl: 86400 });
-      // Route to matching MCP transport handler.
-      const serveUrl = new URL(request.url);
-      const isSsePath = url.pathname === "/sse" || url.pathname.startsWith("/sse/");
-      if (isSsePath) {
-        const sseHandler = AgenticMcpAgent.serveSSE("/sse", { binding: "MCP_AGENT" });
-        if (url.pathname === "/sse") {
-          serveUrl.searchParams.set("sessionId", doKey);
-        }
-        const sseRequest = new Request(serveUrl.toString(), request);
-        return corsResponse(await sseHandler.fetch(sseRequest, env, _ctx));
-      }
+      // Use McpAgent.serve() handler — pass doKey as sessionId so it uses idFromName
       const mcpHandler = AgenticMcpAgent.serve("/mcp", { binding: "MCP_AGENT" });
+      const serveUrl = new URL(request.url);
       serveUrl.pathname = "/mcp";
       serveUrl.searchParams.set("sessionId", doKey);
       const serveRequest = new Request(serveUrl.toString(), request);
@@ -644,14 +602,7 @@ export default {
     if (url.pathname === "/") {
       return corsResponse(Response.json({
         name: "agentic-mcp-server",
-        endpoints: {
-          mcp: "/mcp",
-          sse: "/sse",
-          debug_mcp: "/debug/mcp",
-          dashboard_ws: "/dashboard/ws",
-          dashboard_api: "/dashboard/api/{sessions|features|activity|stats}",
-          health: "/health",
-        },
+        endpoints: { mcp: "/mcp", dashboard_ws: "/dashboard/ws", dashboard_api: "/dashboard/api/{sessions|features|activity|stats}", health: "/health" },
       }));
     }
     return corsResponse(new Response("Not found", { status: 404 }));
