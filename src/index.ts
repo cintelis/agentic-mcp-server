@@ -482,24 +482,21 @@ export class AgenticMcpAgent extends McpAgent<Env> {
   }
 
   async onStart(): Promise<void> {
-    // Guard against being called before init()
-    if (!this.e || !this.session) return;
-    try {
-      const rawName = this.doCtx.id.name ?? "";
-      const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "";
-      if (!doKey) return;
-      const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
-      if (!identityJson) return;
-      const identity = JSON.parse(identityJson) as { role: string; name: string };
-      if (this.session.agentName === "unknown-agent" || !this.session.agentName) {
-        this.session.agentRole = identity.role as AgentRole;
-        this.session.agentName = identity.name;
-        await this.persistSession();
-        await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
-          lastActiveAt: this.session.lastActiveAt,
-        });
-      }
-    } catch { /* never throw from onStart */ }
+    // Called on every DO activation — update agentName/role from KV in case init() was skipped
+    const rawName = this.doCtx.id.name ?? "";
+    const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "";
+    if (!doKey) return;
+    const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
+    if (!identityJson) return;
+    const identity = JSON.parse(identityJson) as { role: string; name: string };
+    if (this.session && (this.session.agentName === "unknown-agent" || !this.session.agentName)) {
+      this.session.agentRole = identity.role as AgentRole;
+      this.session.agentName = identity.name;
+      await this.persistSession();
+      await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
+        lastActiveAt: this.session.lastActiveAt,
+      });
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -520,9 +517,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
 async function handleDashboardApi(url: URL, env: Env, request?: Request): Promise<Response> {
   const path = url.pathname.replace("/dashboard/api", "");
   if (path === "/sessions") {
-    const sessionsRaw = await env.SHARED_CONTEXT.get(KV_KEYS.sessionRegistry);
-    const sessions = sessionsRaw ? JSON.parse(sessionsRaw) : { sessions: {} };
-    return Response.json(sessions);
+    return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.sessionRegistry, "json") ?? { sessions: {} });
   }
   if (path === "/features") {
     const index = await env.SHARED_CONTEXT.get<string[]>(KV_KEYS.featureIndex, "json") ?? [];
@@ -538,9 +533,7 @@ async function handleDashboardApi(url: URL, env: Env, request?: Request): Promis
     return Response.json((await env.SHARED_CONTEXT.get<object[]>(KV_KEYS.activityLog, "json") ?? []).slice(0, limit));
   }
   if (path === "/stats") {
-    const statsRaw = await env.SHARED_CONTEXT.get(KV_KEYS.stats);
-    const stats = statsRaw ? JSON.parse(statsRaw) : {};
-    return Response.json(stats);
+    return Response.json(await env.SHARED_CONTEXT.get(KV_KEYS.stats, "json") ?? {});
   }
   if (path === "/memory") {
     const role = url.searchParams.get("role");
