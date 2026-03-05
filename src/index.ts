@@ -494,8 +494,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session.agentName = identity.name;
       await this.persistSession();
       await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
-        agentRole: this.session.agentRole,
-        agentName: this.session.agentName,
+        lastActiveAt: this.session.lastActiveAt,
       });
     }
   }
