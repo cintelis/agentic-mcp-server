@@ -121,7 +121,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
         tool, featureId, taskId, durationMs, success,
       };
       logActivity(this.e.SHARED_CONTEXT, evt).catch(() => {});
-      this.broadcast({ type: "tool_call", ...evt }).catch(() => {});
+      this.broadcastEvent({ type: "tool_call", ...evt }).catch(() => {});
       touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
         lastActiveAt: new Date().toISOString(),
         ...(featureId ? { currentFeature: featureId } : {}),
@@ -130,7 +130,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
     }
   }
 
-  private async broadcast(event: object): Promise<void> {
+  private async broadcastEvent(event: object): Promise<void> {
     const id = this.e.DASHBOARD_BROADCASTER.idFromName("global");
     const stub = this.e.DASHBOARD_BROADCASTER.get(id);
     await stub.fetch("https://internal/broadcast", {
@@ -232,7 +232,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
           }
           this.session.currentFeature = id;
           await this.persistSession();
-          this.broadcast({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
+          this.broadcastEvent({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
           return this.ok(`Feature '${id}' saved. Tasks: ${tasks.length}.`);
         })
     );
@@ -257,7 +257,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
           spec.updatedAt = new Date().toISOString();
           await this.e.SHARED_CONTEXT.put(KV_KEYS.featureSpec(args.featureId), JSON.stringify(spec));
           await this.persistSession();
-          this.broadcast({
+          this.broadcastEvent({
             type: "task_updated", featureId: args.featureId, taskId: args.taskId,
             status: args.status, agentRole: this.session.agentRole,
             agentName: this.session.agentName, timestamp: new Date().toISOString(),
@@ -306,7 +306,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
             if (existing) finalContent = `${existing}\n\n---\n\n${args.content}`;
           }
           await this.e.SHARED_CONTEXT.put(key, finalContent);
-          this.broadcast({
+          this.broadcastEvent({
             type: "memory_written", key, role: args.role,
             agentName: this.session.agentName, timestamp: new Date().toISOString(),
           }).catch(() => {});
@@ -383,7 +383,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
             base: args.base, draft: args.draft, reviewers: args.reviewers,
           });
           await this.cachePROnFeature(args.head, pr);
-          this.broadcast({ type: "pr_opened", pr, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
+          this.broadcastEvent({ type: "pr_opened", pr, agentName: this.session.agentName, timestamp: new Date().toISOString() }).catch(() => {});
           return this.ok(`PR #${pr.number} opened: ${pr.url}`);
         })
     );
@@ -444,7 +444,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
             commitTitle: args.commitTitle,
             commitMessage: args.commitMessage,
           });
-          this.broadcast({
+          this.broadcastEvent({
             type: "pr_merged", repo: args.repo, prNumber: args.prNumber,
             sha: result.sha, agentName: this.session.agentName, timestamp: new Date().toISOString(),
           }).catch(() => {});
@@ -461,7 +461,7 @@ export class AgenticMcpAgent extends McpAgent<Env> {
         spec.githubPR = pr;
         spec.updatedAt = new Date().toISOString();
         await this.e.SHARED_CONTEXT.put(KV_KEYS.featureSpec(id), JSON.stringify(spec));
-        this.broadcast({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
+        this.broadcastEvent({ type: "feature_updated", feature: spec, timestamp: new Date().toISOString() }).catch(() => {});
         break;
       }
     }
