@@ -64,18 +64,26 @@ export class AgenticMcpAgent extends McpAgent<Env> {
       this.session = stored;
       this.session.lastActiveAt = new Date().toISOString();
     } else {
-      // DO name is "streamable-http:<doKey>" or "sse:<doKey>" — strip the prefix to get doKey
-      const rawName = this.doCtx.id.name ?? "";
-      console.log("[AgenticMcpAgent] rawName:", rawName);
-      const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "orchestrator:unknown-agent";
-      console.log("[AgenticMcpAgent] doKey:", doKey);
-      const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
-      console.log("[AgenticMcpAgent] identityJson:", identityJson);
-      const identity = identityJson ? JSON.parse(identityJson) as { role: string; name: string } : { role: "orchestrator", name: "unknown-agent" };
+      // Read room from DO storage — captured by fetch() override from x-partykit-room header
+      // Room format is the sessionId e.g. "orchestrator:claude-orchestrator"
+      const room = await this.doCtx.storage.get<string>("_room") ?? "";
+      const roleFromRoom = (room.split(":")[0] || "") as AgentRole;
+      // Look up identity by role — stored in KV by main worker before serve() is called
+      const identityJson = roleFromRoom
+        ? await this.e.SHARED_CONTEXT.get(`agent-role:${roleFromRoom}`)
+        : null;
+      const roleNameMap: Record<string, string> = {
+        orchestrator: "claude-orchestrator", planner: "claude-planner",
+        frontend: "claude-frontend", reviewer: "claude-reviewer",
+        backend: "codex-backend", tester: "codex-tester", devops: "codex-devops",
+      };
+      const identity = identityJson
+        ? JSON.parse(identityJson) as { role: string; name: string }
+        : { role: roleFromRoom || "orchestrator", name: roleNameMap[roleFromRoom] ?? "unknown-agent" };
       const role = identity.role as AgentRole;
       const agentName = identity.name;
       this.session = {
-        sessionId: this.doCtx.id.toString(), agentRole: role, agentName,
+        sessionId: this.doCtx.id.name ?? this.doCtx.id.toString(), agentRole: role, agentName,
         createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(),
         tasksCompleted: [], notes: "",
       };
@@ -473,6 +481,37 @@ export class AgenticMcpAgent extends McpAgent<Env> {
     await this.doCtx.storage.put("session", this.session);
   }
 
+  async onStart(): Promise<void> {
+    // Called on every DO activation — update agentName/role from KV in case init() was skipped
+    const rawName = this.doCtx.id.name ?? "";
+    const doKey = rawName.replace(/^(streamable-http:|sse:)/, "") || "";
+    if (!doKey) return;
+    const identityJson = await this.e.SHARED_CONTEXT.get(`agent-identity:${doKey}`);
+    if (!identityJson) return;
+    const identity = JSON.parse(identityJson) as { role: string; name: string };
+    if (this.session && (this.session.agentName === "unknown-agent" || !this.session.agentName)) {
+      this.session.agentRole = identity.role as AgentRole;
+      this.session.agentName = identity.name;
+      await this.persistSession();
+      await touchSession(this.e.SHARED_CONTEXT, this.session.sessionId, {
+        agentRole: this.session.agentRole,
+        agentName: this.session.agentName,
+      });
+    }
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    // Capture x-partykit-room before init() runs so we can resolve role/name
+    const room = request.headers.get("x-partykit-room");
+    if (room) {
+      const existingRoom = await this.doCtx.storage.get<string>("_room");
+      if (!existingRoom) {
+        await this.doCtx.storage.put("_room", room);
+      }
+    }
+    return super.fetch(request);
+  }
+
 }
 
 // ── Dashboard API ────────────────────────────────────────────────
@@ -517,11 +556,23 @@ export default {
     }
     if (url.pathname === "/mcp" || url.pathname === "/sse" || url.pathname.startsWith("/mcp/")) {
       const role = url.searchParams.get("role") ?? "orchestrator";
-      const name = url.searchParams.get("name") ?? "unknown-agent";
+      // Derive name from role — mcp-remote strips query params so we can't rely on name being forwarded
+      const roleNameMap: Record<string, string> = {
+        orchestrator: "claude-orchestrator",
+        planner: "claude-planner",
+        frontend: "claude-frontend",
+        reviewer: "claude-reviewer",
+        backend: "codex-backend",
+        tester: "codex-tester",
+        devops: "codex-devops",
+      };
+      const name = roleNameMap[role] ?? `claude-${role}`;
       const sessionParam = url.searchParams.get("session");
       const doKey = sessionParam ?? `${role}:${name}`;
-      // Store role/name in KV so init() can read them
-      await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, JSON.stringify({ role, name }));
+      // Store role/name in KV — both by doKey AND by role alone so init() can find it
+      const identity = JSON.stringify({ role, name });
+      await env.SHARED_CONTEXT.put(`agent-identity:${doKey}`, identity, { expirationTtl: 86400 });
+      await env.SHARED_CONTEXT.put(`agent-role:${role}`, identity, { expirationTtl: 86400 });
       // Use McpAgent.serve() handler — pass doKey as sessionId so it uses idFromName
       const mcpHandler = AgenticMcpAgent.serve("/mcp", { binding: "MCP_AGENT" });
       const serveUrl = new URL(request.url);
